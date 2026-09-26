@@ -46,7 +46,13 @@ void submit_animation_quad(Controller& c,Animation& a,Vertex28(&v)[4],std::uint3
     const auto* bounds=draw_environment::viewport_bounds();bool left=false,top=false,right=false,bottom=false;
     for(const auto& p:v){left|=bounds[0]<=p.x;top|=bounds[1]<=p.y;right|=p.x<=bounds[2];bottom|=p.y<=bounds[3];}if(!(left&&top&&right&&bottom))return;
     auto& device=draw_environment::device();const auto& sprite=current_sprite(draw_environment::controller(),a);
-    if(c.cached_texture!=sprite.texture_id){c.cached_texture=sprite.texture_id;flush_textured_quads(c,device);device.SetTexture(0,texture(c,c.cached_texture));}
+    if(c.cached_texture!=sprite.texture_id){c.cached_texture=sprite.texture_id;flush_textured_quads(c,device);
+#ifdef TH_SDL3
+        device.bind_texture(texture(c,c.cached_texture));
+#else
+        device.SetTexture(0,texture(c,c.cached_texture));
+#endif
+    }
     if(c.unknown_cached_e0e!=1){flush_textured_quads(c,device);c.unknown_cached_e0e=1;}
     if(!(flags&2)){
         const auto mode=(a.base.flags[2]>>10)&7;auto primary=a.base.field_490,secondary=a.base.field_494;

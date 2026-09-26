@@ -28,7 +28,7 @@ namespace {
 class GameServices final:public Services {
 public:
     std::uint32_t& input_latch() override {return pe::window_state.input_latch;}
-    IDirect3DDevice9& device() override {
+    Device& device() override {
         if(!pe::graphics_state.device) throw std::logic_error("GameController requires initialized graphics device");
         return *pe::graphics_state.device;
     }

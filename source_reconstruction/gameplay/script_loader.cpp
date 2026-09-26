@@ -10,7 +10,11 @@ namespace {
 // Original5c49f4 is a 12-byte pmr::list of data-pointer/pmr::string pairs.
 // The separate sizes map is source bounds metadata, not fabricated game data.
 struct CachedScript {std::uint8_t* data;std::pmr::string name;};
+// MSVC x86 STL layout evidence (pmr::list node bookkeeping and pmr::string
+// member size); binding on the Windows build only.
+#ifndef TH_SDL3
 static_assert(sizeof(CachedScript)==32 && sizeof(std::pmr::list<CachedScript>)==12);
+#endif
 std::pmr::list<CachedScript> cache;
 std::unordered_map<std::uint8_t*,std::size_t> sizes;
 char path_buffer[260]={}; //actual BSS5c4c20,4bd4a0 copies empty prefix then filename

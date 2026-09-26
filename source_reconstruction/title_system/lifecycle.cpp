@@ -1,5 +1,8 @@
 #include "lifecycle.hpp"
 #include "../program_entry/program_entry.hpp"
+#ifdef TH_SDL3
+#include "platform/Time.hpp"
+#endif
 #include "../platform_window/graphics_callbacks.hpp"
 #include "../startup_scene/startup.hpp"
 #include "../sprite_renderer/animation_file.hpp"
@@ -39,8 +42,18 @@ LifecycleEnvironment& lifecycle_environment(){static Environment e;return e;}
 int initialize(TitleInf& o){return initialize(o,lifecycle_environment());}
 int load_worker(){
     if(initialize(*controller())==0){
+#ifdef TH_SDL3
+        while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))web::time::sleep(1);
+#else
         while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))Sleep(1);
-        if(startup::loading_scene){while(startup::loading_scene->draw_frames<180&&!(pe::graphics_state.event_flags&0x60))Sleep(16);sprite::unload_animation_file(*pe::sprite_controller,1);}
+#endif
+        if(startup::loading_scene){
+#ifdef TH_SDL3
+            while(startup::loading_scene->draw_frames<180&&!(pe::graphics_state.event_flags&0x60))web::time::sleep(16);
+#else
+            while(startup::loading_scene->draw_frames<180&&!(pe::graphics_state.event_flags&0x60))Sleep(16);
+#endif
+            sprite::unload_animation_file(*pe::sprite_controller,1);}
         scheduler::enable(*controller()->update_node);pe::window_state.input_latch=1;
     }else gameplay::request_scene(3);
     return 0;
@@ -50,7 +63,7 @@ TitleInf* create(){
     {std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(1));memory=::operator new(sizeof(TitleInf),std::nothrow);}
     if(!memory)return nullptr;std::memset(memory,0,sizeof(TitleInf));auto* o=new(memory)TitleInf;
     pe::window_state.input_latch=0;
-    {std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(6));runtime::detach_worker(o->worker);o->worker.close_requested.store(false,std::memory_order_seq_cst);o->worker.thread=std::jthread([]{load_worker();});}
+    {std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(6));runtime::detach_worker(o->worker);o->worker.close_requested.store(false,std::memory_order_seq_cst);o->worker.thread=TH20_WORKER_THREAD("title-load",[]{load_worker();});}
     return o;
 }
 }

@@ -23,7 +23,10 @@ Renderer::~Renderer() {
     for(auto* node:additional_draw_nodes)scheduler::remove(*pe::function_controller,pe::scheduler_environment,node);
     runtime::join_worker(worker);s::unload_animation_file(*pe::sprite_controller,2);s::unload_animation_file(*pe::sprite_controller,0);renderer=nullptr;
     for(scheduler::Iterator it(jobs.sentinel.next);it.current;it.advance())destroy_job(reinterpret_cast<Job*>(it.current->value));
+#ifndef TH_SDL3
     for(auto font:pw::fonts)DeleteObject(font);
+#endif
+    // TH_SDL3 font faces are owned by the FreeType font host.
     // Member destructors execute list -> Worker -> animations[2..0], exactly
     // matching the original. OwnedAnimation supplies the actual ANM cleanup.
 }

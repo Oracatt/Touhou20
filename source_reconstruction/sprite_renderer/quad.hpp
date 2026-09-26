@@ -16,7 +16,7 @@ void draw_axis_aligned_sprite(Controller&,Animation&,bool snap); //43f550/43f5c0
 void draw_rotated_sprite(Controller&,Animation&); //43f630
 namespace draw_environment {
 Controller& controller();
-IDirect3DDevice9& device();
+Device& device();
 const float* viewport_bounds(); //current viewport +11c, left top right bottom
 }
 }

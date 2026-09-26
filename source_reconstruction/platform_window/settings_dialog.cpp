@@ -1,6 +1,7 @@
 #include "platform_window.hpp"
 #include "data_constants.hpp"
 #include <memory>
+#ifndef TH_SDL3
 
 namespace th20::source::platform_window {
 namespace pe=program_entry;
@@ -85,6 +86,11 @@ void show_startup_settings() {
     }
 }
 }
+#else
+namespace th20::source::platform_window {
+void show_startup_settings() {} // launcher configure injects the same fields
+}
+#endif
 namespace th20::source::program_entry::unrecovered {
 void fn_0041ae70(HINSTANCE) {platform_window::show_startup_settings();}
 }

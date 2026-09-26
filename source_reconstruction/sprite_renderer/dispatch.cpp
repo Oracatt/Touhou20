@@ -1,6 +1,9 @@
 #include "dispatch.hpp"
 #include "../core_scheduler/scheduler.hpp"
 #include "../runtime_core/runtime_core.hpp"
+#ifdef TH_SDL3
+#include "../platform_window/graphics_callbacks.hpp"
+#endif
 namespace th20::source::sprite {
 std::uint32_t select_layer_animations(AnimationList* group,std::int32_t layer,bool secondary) noexcept {
     initialize_animation_list(group[2]);std::uint32_t selected=0;
@@ -19,11 +22,35 @@ void configure_animation_layer(Controller& c,std::int32_t layer,std::int32_t gro
     else if(layer==43||layer==44){e::select_camera(3);e::disable_fog();c.field_6c0=13;}
     else if(layer<3||(layer>38&&layer<43))c.field_6c0=0;
     else if(layer<20){const auto target=g+(layer<6?1u:(layer<12?3u:5u));if(c.field_6c0!=target){e::select_layer_camera(0);e::disable_fog();c.field_6c0=target;}}
-    else if(layer<24){if(c.field_6c0!=g+7){e::select_viewport_camera(1);e::disable_depth_write();e::set_render_state(23,8);}}
-    else if(layer<26){if(c.field_6c0!=9){e::select_camera(4);e::disable_depth_write();e::set_render_state(23,8);reset_draw_state();c.field_6c0=9;}}
+    else if(layer<24){if(c.field_6c0!=g+7){e::select_viewport_camera(1);e::disable_depth_write();
+#ifdef TH_SDL3
+        platform_window::set_depth_compare(program_entry::graphics_state,touhou::graphics::Compare::Always);
+#else
+        e::set_render_state(23,8);
+#endif
+    }}
+    else if(layer<26){if(c.field_6c0!=9){e::select_camera(4);e::disable_depth_write();
+#ifdef TH_SDL3
+        platform_window::set_depth_compare(program_entry::graphics_state,touhou::graphics::Compare::Always);
+#else
+        e::set_render_state(23,8);
+#endif
+        reset_draw_state();c.field_6c0=9;}}
     else if(layer<32||(layer>33&&layer<37)||(layer>44&&layer<49)||(layer>50&&layer<54)){
-        if(c.field_6c0!=10){e::select_camera(2);e::disable_depth_write();e::set_render_state(23,8);reset_draw_state();c.field_6c0=10;}
-    }else if(((layer>31&&layer<34)||(layer>48&&layer<51))&&c.field_6c0!=g+11){e::select_viewport_camera(5);e::disable_depth_write();e::set_render_state(23,8);reset_draw_state();c.field_6c0=g+11;}
+        if(c.field_6c0!=10){e::select_camera(2);e::disable_depth_write();
+#ifdef TH_SDL3
+        platform_window::set_depth_compare(program_entry::graphics_state,touhou::graphics::Compare::Always);
+#else
+        e::set_render_state(23,8);
+#endif
+        reset_draw_state();c.field_6c0=10;}
+    }else if(((layer>31&&layer<34)||(layer>48&&layer<51))&&c.field_6c0!=g+11){e::select_viewport_camera(5);e::disable_depth_write();
+#ifdef TH_SDL3
+        platform_window::set_depth_compare(program_entry::graphics_state,touhou::graphics::Compare::Always);
+#else
+        e::set_render_state(23,8);
+#endif
+        reset_draw_state();c.field_6c0=g+11;}
 }
 void draw_selected_animations(Controller& c,AnimationList* group) {
     for(scheduler::Iterator it(reinterpret_cast<scheduler::Link*>(group[2].sentinel.next));it.current;it.advance()){

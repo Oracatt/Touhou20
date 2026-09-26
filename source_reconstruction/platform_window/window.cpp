@@ -4,9 +4,16 @@
 
 namespace th20::source::platform_window {
 namespace pe=program_entry;
+#ifndef TH_SDL3
 bool is_japanese_user_locale() { return GetUserDefaultLCID()==0x411; }
+#else
+bool is_japanese_user_locale();
+#endif
 
 int acquire_single_instance() {
+#ifdef TH_SDL3
+    return 0; // one runtime per page; the launcher owns process singularity
+#else
     single_instance_mutex=CreateMutexW(nullptr,TRUE,L"th20 App");
     if(GetLastError()==ERROR_ALREADY_EXISTS) {
         pe::unrecovered::log_error(pe::log_buffer,data::already_running);
@@ -18,9 +25,27 @@ int acquire_single_instance() {
     GetConsoleTitleW(console_title,260);
     GetStartupInfoW(&startup);
     return single_instance_mutex?0:-1; // 0x0041c0be..cc
+#endif
 }
 
 int create_game_window(WindowStatePrefix& w,HINSTANCE instance) {
+#ifdef TH_SDL3
+    // The browser canvas replaces the Win32 window; no HWND exists. Display
+    // mode semantics stay windowed at the canvas size (640x480 backbuffer).
+    const auto& c=pe::graphics_state.configuration;
+    w.display_mode=c.saved_display_mode;
+    pe::graphics_state.presentation.Windowed=true;
+    if(c.frame_skip==0 && c.presentation_mode==2) w.flags|=4;
+    else w.flags&=~4u;
+    // 0x0041cc90 writes exactly three int32 fields.
+    w.repeat[0]={15,15,0};w.repeat[1]={12,12,0};w.repeat[2]={12,12,0};w.repeat[3]={8,8,0};
+    w.input_latch=0;calculate_layout(w,1);
+    w.active=1;w.cursor_latch=0;
+    w.window=nullptr;
+    pe::graphics_state.window_handle=nullptr;
+    (void)instance;
+    return 0;
+#else
     const wchar_t* title=is_japanese_user_locale()?
         L"東方錦上京　～ Fossilized Wonder. ver 1.00c":L"TH20 - Fossilized Wonder. ver 1.00c";
     WNDCLASSW klass{};
@@ -55,8 +80,10 @@ int create_game_window(WindowStatePrefix& w,HINSTANCE instance) {
     GetWindowRect(w.window,&pe::graphics_state.window_rectangle);
     pe::graphics_state.window_handle=w.window;
     return w.window?0:1; // original 0x0041d058..67
+#endif
 }
 
+#ifndef TH_SDL3
 LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     auto& w=pe::window_state;auto& c=pe::graphics_state.configuration;
     switch(message) {
@@ -112,6 +139,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     }
     return DefWindowProcW(hwnd,message,wp,lp);
 }
+#endif
 }
 
 namespace th20::source::program_entry::unrecovered {

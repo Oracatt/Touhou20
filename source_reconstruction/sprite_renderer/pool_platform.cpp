@@ -10,7 +10,12 @@ namespace pe=program_entry;
 void select_layer_viewport(pe::GraphicsStatePrefix& graphics,int index) {
     auto& viewport=graphics.viewports[index];graphics.current_viewport=&viewport;
     platform_window::update_camera(viewport,viewport.adjusted_viewport);
-    platform_window::apply_camera(viewport);graphics.device->SetViewport(&viewport.adjusted_viewport);
+    platform_window::apply_camera(viewport);
+#ifdef TH_SDL3
+    {const auto& v=viewport.adjusted_viewport;graphics.device->set_viewport(v.X,v.Y,v.Width,v.Height,v.MinZ,v.MaxZ);}
+#else
+    graphics.device->SetViewport(&viewport.adjusted_viewport);
+#endif
     auto& c=*pe::sprite_controller;
     const float x=_mm_cvtss_f32(_mm_cvtsi32_ss(_mm_setzero_ps(),viewport.offset_x));
     const float y=_mm_cvtss_f32(_mm_cvtsi32_ss(_mm_setzero_ps(),viewport.offset_y));
@@ -25,17 +30,31 @@ void select_layer_camera(std::int32_t preset){select_layer_viewport(pe::graphics
 void select_viewport_camera(std::int32_t preset){select_layer_viewport(pe::graphics_state,preset);}
 void disable_fog(){platform_window::disable_fog(pe::graphics_state);}
 void disable_depth_write(){platform_window::disable_depth_write(pe::graphics_state);}
+#ifndef TH_SDL3
 void set_render_state(std::uint32_t state,std::uint32_t value){platform_window::set_render_state(pe::graphics_state,static_cast<D3DRENDERSTATETYPE>(state),value);}
+#endif
 }
 namespace draw_environment {
 Controller& controller(){return *pe::sprite_controller;}
-IDirect3DDevice9& device(){return *pe::graphics_state.device;}
+Device& device(){return *pe::graphics_state.device;}
 const float* viewport_bounds(){return pe::graphics_state.current_viewport->bounds;}
 pe::ViewportState& current_camera(){return *pe::graphics_state.current_viewport;}
 std::int32_t scaled_dimension(unsigned axis){return axis?pe::window_state.scaled_height:pe::window_state.scaled_width;}
-void enable_fog(){auto& g=pe::graphics_state;if(g.render_value!=1){flush_textured_quads(*pe::sprite_controller,*g.device);g.render_value=1;g.device->SetRenderState(D3DRS_FOGENABLE,1);}}
+void enable_fog(){auto& g=pe::graphics_state;if(g.render_value!=1){flush_textured_quads(*pe::sprite_controller,*g.device);g.render_value=1;
+#ifdef TH_SDL3
+    g.device->set_fog(true);
+#else
+    g.device->SetRenderState(D3DRS_FOGENABLE,1);
+#endif
+}}
 void disable_fog(){platform_window::disable_fog(pe::graphics_state);}
-void enable_depth_write(){auto& g=pe::graphics_state;if(g.field_0dbc!=1){flush_textured_quads(*pe::sprite_controller,*g.device);g.field_0dbc=1;g.device->SetRenderState(D3DRS_ZWRITEENABLE,1);}}
+void enable_depth_write(){auto& g=pe::graphics_state;if(g.field_0dbc!=1){flush_textured_quads(*pe::sprite_controller,*g.device);g.field_0dbc=1;
+#ifdef TH_SDL3
+    g.device->set_depth_mask(true);
+#else
+    g.device->SetRenderState(D3DRS_ZWRITEENABLE,1);
+#endif
+}}
 void disable_depth_write(){platform_window::disable_depth_write(pe::graphics_state);}
 }
 }

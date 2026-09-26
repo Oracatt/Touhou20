@@ -55,7 +55,7 @@ void start_loading(Services& services) {
         if(worker.thread.joinable()) worker.thread.detach();
     }
     worker.close_requested.store(false,std::memory_order_seq_cst);
-    worker.thread=std::jthread([&services] {
+    worker.thread=TH20_WORKER_THREAD("gameplay-load",[&services] {
         // Original 4bcca0 reads global5ba828 when the worker starts.
         if(!controller) throw std::logic_error("Game loading worker has no current GameController");
         services.load(*controller);
@@ -64,7 +64,10 @@ void start_loading(Services& services) {
 GameController* create(Services& services,std::int32_t mode) {
     auto* game=new GameController(services);
     services.input_latch()=0;
+#ifndef TH_SDL3
     services.device().EvictManagedResources();
+#endif
+    // TH_SDL3 textures keep CPU stores; there is no managed pool to evict.
     controller=game;game->restart_mode=mode;game->game_flags|=4u;
     services.owner(Owner::session_overlay)->disable_callbacks();
     services.owner(Owner::global_005c6120)->disable_callbacks();

@@ -25,7 +25,7 @@ runtime::Worker& worker(){return *std::launder(reinterpret_cast<runtime::Worker*
 void launch(void(*entry)()){ //4b99f0/40b1d0, real one shared Graphics worker
     std::lock_guard<std::recursive_mutex> outer(runtime::shared_locks().slot(6));std::lock_guard<std::recursive_mutex> inner(runtime::shared_locks().slot(6));auto& w=worker();
     {std::lock_guard<std::recursive_mutex> detach(runtime::shared_locks().slot(6));if(w.thread.joinable())w.thread.detach();}
-    w.close_requested.store(false,std::memory_order_seq_cst);w.thread=std::jthread(entry);
+    w.close_requested.store(false,std::memory_order_seq_cst);w.thread=TH20_WORKER_THREAD("help",entry);
 }
 void load_file(){auto& o=*controller();o.file=sprite::load_animation_file(*pe::sprite_controller,14,"help.anm",pe::log_buffer,pe::graphics_state.event_flags);if(o.file){runtime::detach_worker(worker());scheduler::enable(*o.update_node);scheduler::enable(*o.draw_node);}}
 void load_image(){auto& o=*controller();auto data=resources::read(o.filename,false);if(data){o.image_size=static_cast<std::uint32_t>(data->size());o.image_bytes=static_cast<std::uint8_t*>(runtime::allocate_bytes(data->size()));std::memcpy(o.image_bytes,data->data(),data->size());}else{o.image_bytes=nullptr;o.image_size=0;}o.substate=3;runtime::detach_worker(worker());}
@@ -54,7 +54,13 @@ int update(HelpInf& o){
             if(pressed(0x80001)){effect(7);begin_image(o);}else if(pressed(0x106)){effect(9);for(int i=0;i<9;++i)interrupt(o,i,1);o.state=2;o.substate=0;recovered::timer_set(o.age,0);}}
         break;
     case 3:
-        replace_texture_image(o.file->textures[1],o.image_bytes,o.image_size,1,false);if(o.image_bytes){runtime::release_bytes(o.image_bytes);o.image_bytes=nullptr;}o.image_bytes=nullptr;o.file->textures[1].texture->PreLoad();spawn(o,13,position);o.substate=4;recovered::timer_set(o.age,0);
+        replace_texture_image(o.file->textures[1],o.image_bytes,o.image_size,1,false);if(o.image_bytes){runtime::release_bytes(o.image_bytes);o.image_bytes=nullptr;}o.image_bytes=nullptr;
+#ifdef TH_SDL3
+        web::shared_device().preload(o.file->textures[1].texture);
+#else
+        o.file->textures[1].texture->PreLoad();
+#endif
+        spawn(o,13,position);o.substate=4;recovered::timer_set(o.age,0);
         [[fallthrough]];
     case 4:
         if(o.age.current>=20){

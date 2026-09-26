@@ -24,7 +24,7 @@ const Registration draw_callbacks[]={
 };
 static_assert(std::size(draw_callbacks)==50);
 }
-void construct_controller(Controller& c,scheduler::State& callbacks,scheduler::Environment& environment,IDirect3DDevice9& device) {
+void construct_controller(Controller& c,scheduler::State& callbacks,scheduler::Environment& environment,Device& device) {
     c.field_00=0;new(c.worker_storage) runtime::Worker;
     c.field_14=0;std::memset(c.draw_state,0,sizeof(c.draw_state));
     c.field_b8=c.field_bc=c.field_c0=c.draw_calls=0;std::memset(c.fields_c8,0,sizeof(c.fields_c8));
@@ -60,9 +60,13 @@ void construct_controller(Controller& c,scheduler::State& callbacks,scheduler::E
     scheduler::register_callback(callbacks,environment,44,&primary_update,&c,false,true);
     scheduler::register_callback(callbacks,environment,14,&secondary_update,&c,false,true);
     for(const auto& entry:draw_callbacks)scheduler::register_callback(callbacks,environment,entry.priority,entry.callback,&c,true,true);
+    #ifdef TH_SDL3
+    c.field_6000714=0; // no programmable shader state exists on the semantic device
+#else
     device.SetVertexShader(nullptr);c.field_6000714=0; // device vtable +0x170
+#endif
 }
-Controller* create_controller(scheduler::State& callbacks,scheduler::Environment& environment,IDirect3DDevice9& device) {
+Controller* create_controller(scheduler::State& callbacks,scheduler::Environment& environment,Device& device) {
     auto* storage=::operator new(sizeof(Controller));std::memset(storage,0,sizeof(Controller));
     auto* controller=new(storage)Controller;
     construct_controller(*controller,callbacks,environment,device);return controller;

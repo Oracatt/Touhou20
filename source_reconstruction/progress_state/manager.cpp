@@ -1,5 +1,11 @@
 #include "manager.hpp"
 #include "file_codec.hpp"
+#ifdef TH_SDL3
+#include "platform/Files.hpp"
+#endif
+#ifdef TH_SDL3
+#include "platform/Files.hpp"
+#endif
 #include "../archive/resource_manager.hpp"
 #include "../program_entry/program_entry.hpp"
 #include "../game_session/session.hpp"
@@ -21,6 +27,17 @@ void write_file(Snapshot& snapshot,const char* name){
     const auto bytes=serialize_snapshot(snapshot,[](const Bytes& input){Bytes result;resources::with_shared_dictionary([&](auto& dictionary){LzssEncoder encoder(dictionary);result=encoder.encode(input);});return result;});
     if(bytes.empty())return;
     const auto path=score_path(name).string();std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(2));
+#ifdef TH_SDL3
+    const auto output=web::files::open(path.c_str(),true);
+    if(!output){
+        runtime::log_error(pe::log_buffer,"error : \x83\x58\x83\x52\x83\x41\x83\x74\x83\x40\x83\x43\x83\x8b\x82\xaa\x8f\x91\x82\xab\x8d\x9e\x82\xdf\x82\xc8\x82\xa2\n");return;}
+    DWORD written=web::files::write(output,bytes.data(),44);
+    // Two writes are observable in the original. Its short-first-write path
+    // closes the handle; the attempted second write therefore also fails.
+    if(written!=44)web::files::close(output);
+    const auto size=static_cast<DWORD>(bytes.size()-44);written=web::files::write(output,bytes.data()+44,size);
+    if(written!=size)web::files::close(output);web::files::close(output);
+#else
     wchar_t wide_path[MAX_PATH+2]{};MultiByteToWideChar(932,0,path.c_str(),-1,wide_path,MAX_PATH);
     HANDLE output=CreateFileW(wide_path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(output==INVALID_HANDLE_VALUE){wchar_t* message=nullptr;FormatMessageW(0x1300,nullptr,GetLastError(),0x400,reinterpret_cast<LPWSTR>(&message),0,nullptr);LocalFree(message);
@@ -31,13 +48,14 @@ void write_file(Snapshot& snapshot,const char* name){
     if(written!=44)CloseHandle(output);
     const auto size=static_cast<DWORD>(bytes.size()-44);written=0;WriteFile(output,bytes.data()+44,size,&written,nullptr);
     if(written!=size)CloseHandle(output);CloseHandle(output);
+#endif
 }
 }
 SaveManager::SaveManager(){runtime::join_worker(worker);launch(&SaveManager::load);}
 void SaveManager::launch(void(SaveManager::*operation)()){
     std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(6));
     {std::lock_guard<std::recursive_mutex> nested(runtime::shared_locks().slot(6));if(worker.thread.joinable())worker.thread.detach();}
-    worker.close_requested.store(false,std::memory_order_seq_cst);worker.thread=std::jthread([this,operation]{(this->*operation)();});
+    worker.close_requested.store(false,std::memory_order_seq_cst);worker.thread=TH20_WORKER_THREAD("save-manager",[this,operation]{(this->*operation)();});
 }
 int SaveManager::commit(){runtime::join_worker(worker);launch(&SaveManager::save);return 0;}
 SaveManager::~SaveManager(){commit();runtime::join_worker(worker);release_snapshot_buffers(current);release_snapshot_buffers(backup);}

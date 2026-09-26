@@ -26,19 +26,43 @@ void TransitionPanels::draw(){
     const bool masked=mode==2||(mode==0&&program_entry::graphics_state.presentation.BackBufferFormat==D3DFMT_A8R8G8B8);
     if(masked){
         s::flush_textured_quads(c,d);
+#ifdef TH_SDL3
+        {using namespace touhou::graphics;auto& p=d.pipeline();
+        p.alphaTest=false;p.separateAlphaBlend=true;
+        p.sourceBlend=BlendFactor::Zero;p.destinationBlend=BlendFactor::One;p.blendEquation=BlendEquation::Add;
+        p.sourceBlendAlpha=BlendFactor::One;p.destinationBlendAlpha=BlendFactor::Zero;p.blendEquationAlpha=BlendEquation::Add;}
+#else
         for(auto state:{std::pair<unsigned,unsigned>{15,0},{206,1},{19,1},{20,2},{171,1},{207,2},{208,1},{209,1}})d.SetRenderState(static_cast<D3DRENDERSTATETYPE>(state.first),state.second);
+#endif
         float left=128,top=16,right=512,bottom=464;
         if(mode!=2){left=std::bit_cast<float>(c.fields_c8[2]);top=std::bit_cast<float>(c.fields_c8[3]);right=n::add32(n::int_float(program_entry::window_state.scaled_width),left);bottom=n::add32(n::int_float(program_entry::window_state.scaled_height),top);}
         s::Vertex20 vertices[4]={{left,top,0,1,0},{right,top,0,1,0},{left,bottom,0,1,0},{right,bottom,0,1,0}};
+#ifdef TH_SDL3
+        {using namespace touhou::graphics;auto& p=d.pipeline();
+        p.color.operation=p.alpha.operation=ColorOperation::First;
+        p.color.first=p.alpha.first={ArgumentSource::Diffuse};
+        d.vertex_format(VertexLayout::ScreenColor);d.draw(Topology::Strip,2,vertices,sizeof(s::Vertex20));
+        p.alphaTest=true;
+        p.color.operation=p.alpha.operation=ColorOperation::Multiply;
+        p.color.first=p.alpha.first={ArgumentSource::Texture};
+        p.sourceBlendAlpha=BlendFactor::SourceAlpha;p.destinationBlendAlpha=BlendFactor::One;p.blendEquationAlpha=BlendEquation::Add;}
+#else
         for(auto state:{std::pair<unsigned,unsigned>{4,2},{1,2},{5,0},{2,0}})d.SetTextureStageState(0,static_cast<D3DTEXTURESTAGESTATETYPE>(state.first),state.second);
         d.SetFVF(0x44);d.DrawPrimitiveUP(D3DPT_TRIANGLESTRIP,2,vertices,sizeof(s::Vertex20));
         d.SetRenderState(D3DRS_ALPHATESTENABLE,1);
         for(auto state:{std::pair<unsigned,unsigned>{4,4},{1,4},{5,2},{2,2}})d.SetTextureStageState(0,static_cast<D3DTEXTURESTAGESTATETYPE>(state.first),state.second);
-        c.blend_mode=11;
         for(auto state:{std::pair<unsigned,unsigned>{207,5},{208,2},{209,1}})d.SetRenderState(static_cast<D3DRENDERSTATETYPE>(state.first),state.second);
+#endif
+        c.blend_mode=11;
     }
     for(auto& p:panels)s::draw_animation(c,p);
-    if(mode==2||(mode==0&&program_entry::graphics_state.presentation.BackBufferFormat==D3DFMT_A8R8G8B8)){d.SetRenderState(static_cast<D3DRENDERSTATETYPE>(206),1);s::draw_animation(c,mask);s::flush_textured_quads(c,d);}
+    if(mode==2||(mode==0&&program_entry::graphics_state.presentation.BackBufferFormat==D3DFMT_A8R8G8B8)){
+#ifdef TH_SDL3
+        d.set_separate_alpha_blend(true);
+#else
+        d.SetRenderState(static_cast<D3DRENDERSTATETYPE>(206),1);
+#endif
+        s::draw_animation(c,mask);s::flush_textured_quads(c,d);}
 }
 namespace unrecovered {
 void __cdecl initialize_0(s::Animation* a,const void* p,int view){void* memory=::operator new(sizeof(TransitionPanels),std::nothrow);if(!memory)throw std::bad_alloc();std::memset(memory,0,sizeof(TransitionPanels));auto* value=new(memory)TransitionPanels(*a);s::set_animation_layer(*a,52);value->initialize(*static_cast<const Parameters*>(p),view);}

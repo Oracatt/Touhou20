@@ -72,7 +72,11 @@ int preload_animation_data(AnimationFile& file,const char* name,runtime::Log& lo
     return 0;
 }
 void release_texture_data(TextureRecord& record) {
+#ifdef TH_SDL3
+    if(record.texture) web::shared_device().release_texture(record.texture);
+#else
     if(record.texture){record.texture->Release();record.texture=nullptr;}
+#endif
     if(record.unknown_04){runtime::release_bytes(reinterpret_cast<void*>(record.unknown_04));record.unknown_04=0;}
 }
 }

@@ -19,7 +19,12 @@ struct Script {
     Script(std::uint8_t*,int); //49ecd0
     ~Script(); //49f0b0
 };
-static_assert(sizeof(Script)==0xf0&&offsetof(Script,instruction)==0x5c&&offsetof(Script,worker)==0xdc);
+static_assert(offsetof(Script,instruction)==0x5c&&offsetof(Script,worker)==0xdc);
+// Total size depends on the STL layout (runtime::Worker holds a jthread);
+// binding on the MSVC x86 build only.
+#ifndef TH_SDL3
+static_assert(sizeof(Script)==0xf0);
+#endif
 struct EndingInf final:runtime::CallbackOwner {
     std::uint32_t field_10;
     std::uint8_t* message_data;

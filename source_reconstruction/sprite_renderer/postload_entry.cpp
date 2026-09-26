@@ -33,16 +33,21 @@ int postload_animation_entry(AnimationFile& file,std::uint32_t texture_index,std
         const auto loaded=create_embedded_texture(texture,data+header->texture_offset,header->format,header->width,header->height,context);
         if(loaded<0)return -1;file.fields_5c[2]+=static_cast<std::uint32_t>(loaded);
     }
+#ifdef TH_SDL3
+    const std::uint32_t surface_width=context.device.texture_width(texture.texture),surface_height=context.device.texture_height(texture.texture);
+#else
     D3DSURFACE_DESC description;texture.texture->GetLevelDesc(0,&description);
+    const auto surface_width=description.Width,surface_height=description.Height;
+#endif
     auto* table=reinterpret_cast<std::uint32_t*>(header+1);SpriteData incoming{};
     for(std::uint32_t i=0;i<header->sprite_count;++i) {
         auto& raw=*reinterpret_cast<const FileSprite*>(data+*table++);
         incoming.field_00=file.id;incoming.field_04=texture_index;incoming.texture_id=(file.id<<8)|texture_index;
-        incoming.scale_50=div(as_float(description.Width),th20::recovered::int_float(header->width));
-        incoming.scale_54=div(as_float(description.Height),th20::recovered::int_float(header->height));
+        incoming.scale_50=div(as_float(surface_width),th20::recovered::int_float(header->width));
+        incoming.scale_54=div(as_float(surface_height),th20::recovered::int_float(header->height));
         incoming.left=mul(raw.x,incoming.scale_50);incoming.top=mul(raw.y,incoming.scale_54);
         incoming.right=mul(add(raw.x,raw.width),incoming.scale_50);incoming.bottom=mul(add(raw.y,raw.height),incoming.scale_54);
-        incoming.texture_extent_20=as_float(description.Width);incoming.texture_extent_1c=as_float(description.Height);
+        incoming.texture_extent_20=as_float(surface_width);incoming.texture_extent_1c=as_float(surface_height);
         std::memcpy(incoming.fields_24,raw.extra,sizeof(raw.extra));
         store_sprite_descriptor(file,sprite_base++,incoming);
     }

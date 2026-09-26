@@ -40,7 +40,13 @@ int draw_polyline(s::Controller& c,std::int32_t count,const s::Vec3& center,cons
     auto* vertices=c.colored_write;auto& device=s::draw_environment::device();s::flush_textured_quads(c,device);
     float offset_x,offset_y;std::memcpy(&offset_x,&c.fields_c8[2],4);std::memcpy(&offset_y,&c.fields_c8[3],4);
     for(int i=0;i<count;++i){auto& v=vertices[i];v.x=n::add32(positions[i].x,center.x);v.y=n::add32(positions[i].y,center.y);v.z=0;v.rhw=1;v.color=colors[i];v.x=n::add32(v.x,offset_x);v.y=n::add32(v.y,offset_y);}
-    c.unknown_cached_e0e=1;s::select_texture_combine(c,device,2);device.SetFVF(0x44);device.DrawPrimitiveUP(D3DPT_LINESTRIP,static_cast<UINT>(count-1),vertices,20);c.colored_write+=count;++c.draw_calls;return 0;
+    c.unknown_cached_e0e=1;s::select_texture_combine(c,device,2);
+#ifdef TH_SDL3
+    device.vertex_format(touhou::graphics::VertexLayout::ScreenColor);device.draw(touhou::graphics::Topology::LineStrip,static_cast<std::uint32_t>(count-1),vertices,20);
+#else
+    device.SetFVF(0x44);device.DrawPrimitiveUP(D3DPT_LINESTRIP,static_cast<UINT>(count-1),vertices,20);
+#endif
+    c.colored_write+=count;++c.draw_calls;return 0;
 }
 template class ShortLine<20>;template class ShortLine<30>;template class ShortLine<64>;
 namespace {

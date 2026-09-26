@@ -34,7 +34,12 @@ int draw_thick_polyline(s::Controller& c,int count,const s::Vec3& center,const s
         m::rotate(d.x,d.y,div(-3.1415927410125732f,2));const float length=m::square_root(n::add32(n::mul32(d.x,d.x),n::mul32(d.y,d.y)));if(std::fabs(length)>=.009999999776482582f){d.x=div(d.x,length);d.y=div(d.y,length);}d.x=n::mul32(d.x,half);d.y=n::mul32(d.y,half);
         const float x=n::add32(p[i].x,center.x),y=n::add32(p[i].y,center.y);auto& a=vertices[i*2];auto& b=vertices[i*2+1];a={n::add32(n::add32(x,d.x),offset_x),n::add32(n::add32(y,d.y),offset_y),0,1,colors[i]};b={n::add32(sub(x,d.x),offset_x),n::add32(sub(y,d.y),offset_y),0,1,colors[i]};
     }
-    c.unknown_cached_e0e=1;s::select_texture_combine(c,device,2);device.SetFVF(0x44);device.DrawPrimitiveUP(D3DPT_TRIANGLESTRIP,count*2-2,vertices,20);
+    c.unknown_cached_e0e=1;s::select_texture_combine(c,device,2);
+#ifdef TH_SDL3
+    device.vertex_format(touhou::graphics::VertexLayout::ScreenColor);device.draw(touhou::graphics::Topology::Strip,count*2-2,vertices,20);
+#else
+    device.SetFVF(0x44);device.DrawPrimitiveUP(D3DPT_TRIANGLESTRIP,count*2-2,vertices,20);
+#endif
     //Original advances by count despite writing2*count vertices (draw already
     //consumed the data). Preserve its buffer cursor behavior.
     c.colored_write+=count;++c.draw_calls;return 0;

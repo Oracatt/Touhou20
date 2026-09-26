@@ -6,7 +6,13 @@ int initialize_graphics_callbacks(void*);           // 4dd600
 int update_graphics(void*);                        // 4dc510
 int switch_scene(GraphicsStatePrefix&);             // 4da540
 void open_game_data();                             // 4d9ea0
+#ifndef TH_SDL3
 HRESULT set_render_state(GraphicsStatePrefix&,D3DRENDERSTATETYPE,DWORD); // 4d9db0
+#else
+void set_depth_compare(GraphicsStatePrefix&,touhou::graphics::Compare);  // 4d9db0(ZFUNC)
+void set_fog_color(GraphicsStatePrefix&,std::uint32_t);                  // 4d9db0(FOGCOLOR)
+void set_fog_range(GraphicsStatePrefix&,float,float);                    // 4d9db0(FOGSTART/FOGEND)
+#endif
 HRESULT disable_depth_write(GraphicsStatePrefix&);  // 4ddf80
 extern void (*surface_callback_first)();            // 5c4d30, initialized by4dd600
 extern void (*surface_callback_second)();           // 5c4d34

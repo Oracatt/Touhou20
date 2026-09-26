@@ -17,7 +17,7 @@ class SourceMusic final:public MusicEnvironment {
     void spawn_background(TitleInf& o) override{o.handle390=sprite::spawn_named_animation(*program_entry::sprite_controller,*text::renderer->animation_file,nullptr,19);}
     void spawn_heading(TitleInf& o) override{spawn(o,40);}
     void retire_heading(TitleInf& o) override{retire_animation(o,40);}
-    void begin_read(TitleInf& o) override{std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(6));runtime::detach_worker(o.worker);o.worker.close_requested.store(false,std::memory_order_seq_cst);o.worker.thread=std::jthread([&o]{read_music_comments(o);});}
+    void begin_read(TitleInf& o) override{std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(6));runtime::detach_worker(o.worker);o.worker.close_requested.store(false,std::memory_order_seq_cst);o.worker.thread=TH20_WORKER_THREAD("music-comments",[&o]{read_music_comments(o);});}
     void interrupt(unsigned handle,int event) override{sprite::interrupt_animation_children(*program_entry::sprite_controller,handle,event);}
     void sound(int id) override{program_entry::thread_registry.request_effect(id,0);}
     void play(const char* name) override{play_music(name);}

@@ -4,6 +4,9 @@
 #endif
 #include <Windows.h>
 #include <dsound.h>
+#ifdef TH_SDL3
+#include "platform/Audio.hpp"
+#endif
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -14,6 +17,13 @@
 #include "../platform_services/configuration.hpp"
 
 namespace th20::source::audio {
+#ifdef TH_SDL3
+using SoundDevice = web::audio::Device;
+using SoundBuffer = web::audio::SoundBuffer;
+#else
+using SoundDevice = IDirectSound8;
+using SoundBuffer = IDirectSoundBuffer;
+#endif
 struct EffectDefinition {
     std::int32_t id, file_index;
     std::int16_t volume, cooldown;
@@ -31,7 +41,7 @@ struct Command {
     char name[256];
 };
 struct EffectChannel {
-    IDirectSoundBuffer* buffer;
+    SoundBuffer* buffer;
     std::int32_t cooldown;
     const EffectDefinition* definition;
     std::int32_t id, pan, was_playing;
@@ -64,7 +74,7 @@ LONG music_volume(std::int32_t attenuation,std::int32_t volume) noexcept;
 std::int32_t pan_from_position(float) noexcept;          // 0x426eb0/0x429090 arithmetic
 
 struct DeviceOwner {                                     // original 0x4259a0, four bytes
-    IDirectSound8* device=nullptr;
+    SoundDevice* device=nullptr;
     ~DeviceOwner();                                      // 0x4598a0
     HRESULT initialize(HWND,DWORD,WORD,DWORD,WORD);      // 0x45aaa0
     HRESULT set_primary_format(WORD,DWORD,WORD);         // 0x45b850
@@ -84,8 +94,8 @@ struct Context {
 // All original fields through +0x57e8 retain their original offsets; a source
 // context pointer follows them for required external services.
 struct SoundInf {
-    IDirectSound8* direct_sound;                        // +0, borrowed from device_owner
-    IDirectSoundBuffer* silent_buffer;                  // +4
+    SoundDevice* direct_sound;                        // +0, borrowed from device_owner
+    SoundBuffer* silent_buffer;                  // +4
     HWND window;                                       // +8
     DeviceOwner* device_owner;                         // +c
     DWORD notify_thread_id;                            // +10
@@ -97,7 +107,7 @@ struct SoundInf {
     TrackFormat* track_formats;                        // +1890, owning allocation
     char current_track[256];                           // +1894
     EffectChannel effects[90];                         // +1994
-    IDirectSoundBuffer* source_buffers[72];             // +2204
+    SoundBuffer* source_buffers[72];             // +2204
     std::uint32_t duplicate_counts[72];                 // +2324
     char queued_track[256];                            // +2444
     Command commands[32];                              // +2544, slot 31 is sentinel

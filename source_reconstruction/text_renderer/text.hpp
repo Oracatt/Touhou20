@@ -46,7 +46,12 @@ struct Job {
     Job();                                                //46ac80
     ~Job();                                               //46b0d0
 };
+// Job embeds a pmr::string and pending_tasks a list<function>; sizes/offsets
+// past those members are MSVC x86 STL layout evidence, binding on the Windows
+// build only (TH_SDL3 recompiles with libc++ layouts).
+#ifndef TH_SDL3
 static_assert(sizeof(Job)==0x684 && offsetof(Job,text)==0x5f8 && offsetof(Job,position)==0x614 && offsetof(Job,canceled)==0x680);
+#endif
 void destroy_job(Job*);                                  //46a090/46a100
 Job* create_job();                                       //46a1c0
 struct Point {std::int32_t x,y;};
@@ -103,7 +108,9 @@ public:
     void write_grouped_score(const sprite::Vec3&,std::uint64_t score,std::int32_t final_digit); //46d020
 };
 void format_grouped_integer(char* buffer,std::int32_t capacity,std::int64_t value); //453500
+#ifndef TH_SDL3
 static_assert(sizeof(std::function<void()>)==40 && sizeof(std::list<std::function<void()>>)==8);
+#endif
 static_assert(offsetof(Renderer,lines)==0x11bc && offsetof(Renderer,line_count)==0x1a1bc);
 static_assert(offsetof(Renderer,jobs)==0x1a20c && offsetof(Renderer,worker)==0x1a224);
 static_assert(offsetof(Renderer,animation_file)==0x1a244 && sizeof(Renderer)==0x1a360);

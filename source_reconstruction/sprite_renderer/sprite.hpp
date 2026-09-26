@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "animation.hpp"
+#include "../program_entry/device.hpp"
 #include <memory_resource>
 #include <string>
 
@@ -19,7 +20,7 @@ struct TextureHeader {
     std::uint16_t width,height,format; // +0xa,+0xc,+0xe in original loaded header
 };
 struct TextureRecord {
-    IDirect3DTexture9* texture;
+    DeviceTexture* texture;
     std::uint32_t unknown_04,unknown_08;
     std::uint32_t bytes_per_pixel;
     TextureHeader* header;
@@ -90,9 +91,14 @@ static_assert(sizeof(void*)==4);
 static_assert(sizeof(Vertex20)==20 && sizeof(Vertex28)==28);
 static_assert(sizeof(TexturedCorner20)==20 && sizeof(WorldVertex24)==24);
 static_assert(sizeof(TextureRecord)==0x18);
+// AnimationFile embeds pmr::string members; its offsets are MSVC x86 STL
+// layout evidence and stay binding on the Windows build only (TH_SDL3 uses
+// libc++, where pmr::string is smaller).
+#ifndef TH_SDL3
 static_assert(sizeof(SpriteData)==0x58 && sizeof(AnimationFile)==0x70);
 static_assert(offsetof(AnimationFile,bytes)==0x3c);
 static_assert(offsetof(AnimationFile,textures)==0x58);
+#endif
 static_assert(offsetof(Controller,files)==0x6000730);
 static_assert(offsetof(Controller,animation_dc)==0xdc);
 static_assert(offsetof(Controller,pool)==0x710);
@@ -108,9 +114,9 @@ void initialize_corner(TexturedCorner20&) noexcept;         // 0x449110
 void initialize_colored_vertex(Vertex20&) noexcept;         // 0x449140
 void initialize_textured_vertex(Vertex28&) noexcept;        // 0x449170
 void prepare_buffers(Controller&) noexcept;                 // 0x445a40
-void flush_textured_quads(Controller&,IDirect3DDevice9&);    // 0x4455c0
+void flush_textured_quads(Controller&,Device&);              // 0x4455c0
 void release_device_textures(Controller&);                  // 0x41dbe0
-void recreate_device_textures(Controller&,IDirect3DDevice9&,D3DFORMAT); // 0x41d9f0
-std::int32_t create_render_target(TextureRecord&,IDirect3DDevice9&,UINT,UINT,D3DFORMAT); // 0x44c150
-std::uint32_t create_dynamic_texture(TextureRecord&,IDirect3DDevice9&,UINT,UINT,UINT); // 0x44c0b0
+void recreate_device_textures(Controller&,Device&,D3DFORMAT); // 0x41d9f0
+std::int32_t create_render_target(TextureRecord&,Device&,UINT,UINT,D3DFORMAT); // 0x44c150
+std::uint32_t create_dynamic_texture(TextureRecord&,Device&,UINT,UINT,UINT); // 0x44c0b0
 }

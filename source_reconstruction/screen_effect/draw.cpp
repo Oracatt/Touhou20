@@ -4,10 +4,22 @@
 #include <bit>
 namespace th20::source::screen {
 namespace pe=program_entry;namespace n=th20::recovered;
-void draw_rectangle(sprite::Controller& c,IDirect3DDevice9& device,const float (&bounds)[4],std::uint32_t color){
+void draw_rectangle(sprite::Controller& c,Device& device,const float (&bounds)[4],std::uint32_t color){
     sprite::flush_textured_quads(c,device);sprite::Vertex20 vertices[4];
     const float offset_x=std::bit_cast<float>(c.fields_c8[2]),offset_y=std::bit_cast<float>(c.fields_c8[3]);
     for(unsigned i=0;i<4;++i)vertices[i]={n::add32(bounds[(i&1)?2:0],offset_x),n::add32(bounds[(i&2)?3:1],offset_y),0.f,1.f,color};
+#ifdef TH_SDL3
+    using namespace touhou::graphics;
+    auto& p=device.pipeline();
+    p.color.operation=p.alpha.operation=ColorOperation::First;
+    p.color.first=p.alpha.first={ArgumentSource::Diffuse};
+    p.destinationBlend=BlendFactor::InverseSourceAlpha;
+    device.vertex_format(VertexLayout::ScreenColor);
+    device.draw(Topology::Strip,2,vertices,sizeof(sprite::Vertex20));
+    c.unknown_cached_e0e=0xff;c.field_e18=0;c.cached_texture=0xffffffff;c.unknown_cached_e0d=0xff;c.blend_mode=11;c.field_e0f=0xff;
+    p.color.operation=p.alpha.operation=ColorOperation::Multiply;
+    p.color.first=p.alpha.first={ArgumentSource::Texture};
+#else
     device.SetTextureStageState(0,D3DTSS_ALPHAOP,D3DTOP_SELECTARG1);device.SetTextureStageState(0,D3DTSS_COLOROP,D3DTOP_SELECTARG1);
     device.SetTextureStageState(0,D3DTSS_ALPHAARG1,D3DTA_DIFFUSE);device.SetTextureStageState(0,D3DTSS_COLORARG1,D3DTA_DIFFUSE);
     device.SetRenderState(D3DRS_DESTBLEND,D3DBLEND_INVSRCALPHA);device.SetFVF(D3DFVF_XYZRHW|D3DFVF_DIFFUSE);
@@ -15,6 +27,7 @@ void draw_rectangle(sprite::Controller& c,IDirect3DDevice9& device,const float (
     c.unknown_cached_e0e=0xff;c.field_e18=0;c.cached_texture=0xffffffff;c.unknown_cached_e0d=0xff;c.blend_mode=11;c.field_e0f=0xff;
     device.SetTextureStageState(0,D3DTSS_ALPHAOP,D3DTOP_MODULATE);device.SetTextureStageState(0,D3DTSS_COLOROP,D3DTOP_MODULATE);
     device.SetTextureStageState(0,D3DTSS_ALPHAARG1,D3DTA_TEXTURE);device.SetTextureStageState(0,D3DTSS_COLORARG1,D3DTA_TEXTURE);
+#endif
 }
 int draw_display(Effect& value){
     const float bounds[]{0,0,n::int_float(pe::window_state.scaled_width),n::int_float(pe::window_state.scaled_height)};

@@ -45,8 +45,12 @@ public:
     void* enqueue(std::int32_t delay,std::int32_t type,const Parameters*,sprite::Animation*); //49dc60 exact returned pointer
 };
 static_assert(offsetof(Controller,files)==0x10 && offsetof(Controller,worker)==0x28);
+// Members past the embedded runtime::Worker sit at STL-layout-dependent
+// offsets (jthread size differs); binding on the MSVC x86 build only.
+#ifndef TH_SDL3
 static_assert(offsetof(Controller,handles)==0x3c && offsetof(Controller,requests)==0x103c);
 static_assert(offsetof(Controller,view_index)==0x1303c && sizeof(Controller)==0x13044);
+#endif
 Controller* create_controller(std::int32_t); //49cc90/49e0c0
 void destroy_controller(std::int32_t); //49deb0/4bd240
 Controller* controller(std::int32_t index) noexcept; //437520/41cad0

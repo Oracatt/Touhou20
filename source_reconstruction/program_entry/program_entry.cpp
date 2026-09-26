@@ -10,6 +10,7 @@ extern "C" BOOL WINAPI WINNLSEnableIME(HWND, BOOL);
 
 namespace th20::source::program_entry {
 namespace u = unrecovered;
+#ifndef TH_SDL3
 namespace {
 void hide_cursor() {
     while (ShowCursor(FALSE) >= 0) {}
@@ -100,7 +101,11 @@ poll_message: // 0x0041ea9c
     }
     // The original calls the getter twice, so preserve the two reads.
     if (device(g) == nullptr) goto poll_message;
+#ifdef TH_SDL3
+    cooperative_status = S_OK; // the semantic device cannot be lost
+#else
     cooperative_status = device(g)->TestCooperativeLevel(); // vtable +0x0c
+#endif
     if (cooperative_status == S_OK) {
         if (!needs_device_reset(w)) {
             if ((w.flags & 4u) != 0) {
@@ -230,4 +235,5 @@ release_runtime: // 0x0041ef5e, also reached by initial configuration failures
     // Proved MOV [ebp-0x1064],0 at 0x0041f18d, loaded into EAX at 0x0041f1a2.
     return 0;
 }
+#endif
 }

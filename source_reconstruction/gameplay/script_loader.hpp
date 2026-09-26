@@ -29,8 +29,12 @@ public:
     void bind_program(ecl::Program&) const;                  //non-owning source VM adapter, call after includes load
 };
 #pragma pack(pop)
+// std::string/pmr::vector sizes here are MSVC x86 STL layout evidence;
+// binding on the Windows build only (TH_SDL3 recompiles with libc++ layouts).
+#ifndef TH_SDL3
 static_assert(offsetof(ScriptLoader,records)==0x20c && offsetof(ScriptLoader,string_21c)==0x21c);
 static_assert(offsetof(ScriptLoader,services)==0x23c);
+#endif
 void clear_script_cache();                                  //4a3920 process-global cache sweep
 std::size_t script_cache_size() noexcept;
 }

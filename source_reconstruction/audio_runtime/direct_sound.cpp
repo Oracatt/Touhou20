@@ -4,19 +4,32 @@
 #include <stdexcept>
 
 namespace th20::source::audio {
-DeviceOwner::~DeviceOwner() {if(device) {device->Release();device=nullptr;}}
+DeviceOwner::~DeviceOwner() {
+#ifdef TH_SDL3
+    device=nullptr; // the software device is host-owned
+#else
+    if(device) {device->Release();device=nullptr;}
+#endif
+}
 HRESULT DeviceOwner::initialize(HWND window,DWORD level,WORD channels,DWORD rate,WORD bits) {
+#ifdef TH_SDL3
+    device=&web::audio::device();
+    if(!device->initialize(channels,rate,bits)) return E_FAIL;
+    (void)window;(void)level; // the browser runtime is the sole audio owner
+    set_primary_format(channels,rate,bits);return S_OK;
+#else
     if(device) {device->Release();device=nullptr;}
     auto result=DirectSoundCreate8(nullptr,&device,nullptr);
     if(FAILED(result)) return result;
     result=device->SetCooperativeLevel(window,level);
     if(FAILED(result)) return result;
     set_primary_format(channels,rate,bits);return S_OK;
+#endif
 }
 HRESULT DeviceOwner::set_primary_format(WORD channels,DWORD rate,WORD bits) {
     if(!device) return CO_E_NOTINITIALIZED;
     DSBUFFERDESC description{};description.dwSize=sizeof description;description.dwFlags=DSBCAPS_PRIMARYBUFFER;
-    IDirectSoundBuffer* buffer=nullptr;
+    SoundBuffer* buffer=nullptr;
     auto result=device->CreateSoundBuffer(&description,&buffer,nullptr);
     if(FAILED(result) || !buffer) return result;
     WAVEFORMATEX format{};format.wFormatTag=WAVE_FORMAT_PCM;format.nChannels=channels;

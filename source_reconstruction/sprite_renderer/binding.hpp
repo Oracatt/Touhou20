@@ -13,5 +13,5 @@ AnimationFile& script_file(Controller&,const Animation&);    // 0x437470
 AnimationFile& sprite_file(Controller&,const Animation&);    // 0x437500
 SpriteData& current_sprite(Controller&,const Animation&);   // 0x437cd0/0x437c80
 AnmInstruction* script_start(Controller&,const Animation&); // 0x437490
-IDirect3DTexture9* texture(Controller&,std::uint32_t);       // 0x445a00
+DeviceTexture* texture(Controller&,std::uint32_t);       // 0x445a00
 }

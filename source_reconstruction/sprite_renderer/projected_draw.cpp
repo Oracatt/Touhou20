@@ -5,6 +5,9 @@
 #include "../ecl_vm/math.hpp"
 #include <cstring>
 #include <system_error>
+#ifdef TH_SDL3
+#include "platform/GraphicsMath.hpp"
+#endif
 namespace th20::source::sprite {
 namespace n=th20::recovered;namespace m=ecl::math;namespace e=draw_environment;
 namespace {
@@ -13,6 +16,23 @@ float sub(float a,float b){return _mm_cvtss_f32(_mm_sub_ss(_mm_set_ss(a),_mm_set
 float div(float a,float b){return _mm_cvtss_f32(_mm_div_ss(_mm_set_ss(a),_mm_set_ss(b)));}
 float length(const Vec3& v){return m::square_root(n::add32(n::add32(n::mul32(v.x,v.x),n::mul32(v.y,v.y)),n::mul32(v.z,v.z)));}
 struct Vector4 {float x,y,z,w;};
+#ifdef TH_SDL3
+web::math::Viewport math_viewport(const D3DVIEWPORT9& v){return {v.X,v.Y,v.Width,v.Height,v.MinZ,v.MaxZ};}
+const float* floats(const D3DMATRIX& m){return &m._11;}
+const float* floats(const Matrix4& m){return m.elements;}
+Vec3 project(const Vec3& v,const D3DVIEWPORT9& viewport,const D3DMATRIX& projection,const D3DMATRIX& view,const Matrix4& world){
+    const auto out=web::math::project(*reinterpret_cast<const web::math::Vec3*>(&v),math_viewport(viewport),floats(projection),floats(view),floats(world));
+    return {out.x,out.y,out.z};
+}
+Vector4 transform(const Vec3& v,const Matrix4& matrix){
+    const auto out=web::math::transform(*reinterpret_cast<const web::math::Vec3*>(&v),floats(matrix));
+    return {out.x,out.y,out.z,out.w};
+}
+void rotate_compose(Matrix4& matrix,unsigned axis,float angle){
+    float rotation[16];web::math::rotation_axis(rotation,axis,angle);
+    web::math::multiply(matrix.elements,matrix.elements,rotation);
+}
+#else
 struct ProjectSdk {
     HMODULE module=LoadLibraryW(L"d3dx9_43.dll");
     using Rotation=D3DMATRIX*(WINAPI*)(D3DMATRIX*,float);
@@ -24,11 +44,16 @@ struct ProjectSdk {
     ~ProjectSdk(){if(module)FreeLibrary(module);}
 };
 ProjectSdk& sdk(){static ProjectSdk value;return value;}
+void rotate_compose(Matrix4& matrix,unsigned axis,float angle){
+    D3DMATRIX rotation;sdk().rotations[axis](&rotation,angle);
+    sdk().multiply(reinterpret_cast<D3DMATRIX*>(&matrix),reinterpret_cast<const D3DMATRIX*>(&matrix),&rotation);
+}
+#endif
 constexpr Matrix4 identity{{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}};
 void rotate_matrix(Animation& a,const Vec3& rotation,unsigned order){
     constexpr unsigned orders[6][3]{{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};if(order>=6)return;
     const float angles[]{rotation.x,rotation.y,rotation.z};
-    for(auto axis:orders[order])if(static_cast<double>(angles[axis])!=0.0){D3DMATRIX matrix;sdk().rotations[axis](&matrix,angles[axis]);sdk().multiply(reinterpret_cast<D3DMATRIX*>(&a.matrix_57c),reinterpret_cast<const D3DMATRIX*>(&a.matrix_57c),&matrix);}
+    for(auto axis:orders[order])if(static_cast<double>(angles[axis])!=0.0)rotate_compose(a.matrix_57c,axis,angles[axis]);
 }
 std::uint32_t multiply_color(std::uint32_t a,std::uint32_t b,bool normalized=false){std::uint32_t result=0;for(unsigned shift=0;shift<32;shift+=8){auto value=((a>>shift)&255)*((b>>shift)&255);value=normalized?value/255:value>>7;result|=(value>255?255:value)<<shift;}return result;}
 std::uint32_t tint(Controller& c,std::uint32_t color){return c.field_7d40e90?multiply_color(color,c.field_7d40e8c):color;}
@@ -51,10 +76,19 @@ void transform_position(Animation& a,Vec3& v){
 std::int32_t prepare_projected_billboard(Animation& a){
     const float angle=inherited_animation_rotation(a).z,sine=m::sine(angle),cosine=m::cosine(angle);auto& camera=e::current_camera();Matrix4 world=identity;
     world.elements[12]=n::add32(n::add32(a.base.vector_2c.x,a.vector_5bc.x),a.base.vector_484.x);world.elements[13]=n::add32(n::add32(a.base.vector_2c.y,a.vector_5bc.y),a.base.vector_484.y);world.elements[14]=n::add32(n::add32(a.base.vector_2c.z,a.vector_5bc.z),a.base.vector_484.z);
-    Vec3 origin{},projected,up;sdk().project(&projected,&origin,&camera.viewport,&camera.projection,&camera.view,reinterpret_cast<D3DMATRIX*>(&world));
+    Vec3 origin{},projected,up;
+#ifdef TH_SDL3
+    projected=project(origin,camera.viewport,camera.projection,camera.view,world);
+#else
+    sdk().project(&projected,&origin,&camera.viewport,&camera.projection,&camera.view,reinterpret_cast<D3DMATRIX*>(&world));
+#endif
     // COMISS/JA and JBE admit unordered projected Z, as the original does.
     if(projected.z<0.f||projected.z>1.f)return -1;
+#ifdef TH_SDL3
+    up=project(*reinterpret_cast<Vec3*>(&camera.vectors[4]),camera.viewport,camera.projection,camera.view,world);
+#else
     sdk().project(&up,reinterpret_cast<Vec3*>(&camera.vectors[4]),&camera.viewport,&camera.projection,&camera.view,reinterpret_cast<D3DMATRIX*>(&world));
+#endif
     const float distance=length({sub(up.x,projected.x),sub(up.y,projected.y),sub(up.z,projected.z)});
     const float sx=n::mul32(n::mul32(n::mul32(n::mul32(distance,.5f),a.base.vector_70.x),a.base.vector_50.x),a.base.vector_58.x),sy=n::mul32(n::mul32(n::mul32(n::mul32(distance,.5f),a.base.vector_70.y),a.base.vector_50.y),a.base.vector_58.y);
     constexpr float horizontal[3][4]{{-.5f,.5f,-.5f,.5f},{0,1,0,1},{-1,0,-1,0}},vertical[3][4]{{-.5f,-.5f,.5f,.5f},{0,0,1,1},{-1,-1,0,0}};
@@ -92,7 +126,13 @@ void p4408b0(Controller& c,Animation& a){
 }
 void p441c00(Controller& c,Animation& a){
     prepare_projected_matrix(c,a);auto& camera=e::current_camera();const float fog_start=fog_value(camera,0),span=sub(fog_start,fog_value(camera,1));const auto color=((a.base.flags[2]>>10)&7)==0?a.base.field_490:a.base.field_494;
-    for(unsigned i=0;i<4;++i){Vector4 transformed{};sdk().transform(&transformed,reinterpret_cast<Vec3*>(&c.corners[i]),reinterpret_cast<D3DMATRIX*>(&c.matrix_60007d8));const float distance=length({sub(transformed.x,camera.vectors[0][0]),sub(transformed.y,camera.vectors[0][1]),sub(transformed.z,camera.vectors[0][2])});
+    for(unsigned i=0;i<4;++i){Vector4 transformed{};
+#ifdef TH_SDL3
+        transformed=transform(*reinterpret_cast<Vec3*>(&c.corners[i]),c.matrix_60007d8);
+#else
+        sdk().transform(&transformed,reinterpret_cast<Vec3*>(&c.corners[i]),reinterpret_cast<D3DMATRIX*>(&c.matrix_60007d8));
+#endif
+        const float distance=length({sub(transformed.x,camera.vectors[0][0]),sub(transformed.y,camera.vectors[0][1]),sub(transformed.z,camera.vectors[0][2])});
         if(distance<=fog_start)animation_quad[i].color=color;else {const float t=div(sub(fog_start,distance),span);animation_quad[i].color=t<1.f?fog_color(color,camera,t,false,false,false):((camera.final_state[6]&0xffffffu)|(color&0xff000000u));}
     }
     submit_animation_quad(c,a,animation_quad,2);for(auto& v:animation_quad)v.rhw=1;
@@ -104,11 +144,45 @@ void p441f00(Controller& c,Animation& a){
         rotate_matrix(a,inherited_animation_rotation(a),(a.base.flags[2]>>18)&7);a.base.flags[1]&=~2u;
     }
     Matrix4 world=a.matrix_57c;Vec3 pos{sub(n::add32(n::add32(a.base.vector_2c.x,a.vector_5bc.x),a.base.vector_484.x),n::mul32(n::mul32(a.base.vector_80.x,a.base.vector_50.x),a.base.vector_58.x)),sub(n::add32(n::add32(a.base.vector_2c.y,a.vector_5bc.y),a.base.vector_484.y),n::mul32(n::mul32(a.base.vector_80.y,a.base.vector_50.y),a.base.vector_58.y)),world.elements[14]};transform_position(a,pos);world.elements[12]=pos.x;world.elements[13]=pos.y;
-    apply_animation_render_state(c,a,device);const auto color=tint(c,((a.base.flags[2]>>10)&7)==0?a.base.field_490:a.base.field_494);if(c.field_e04!=color){flush_textured_quads(c,device);c.field_e04=color;device.SetRenderState(D3DRS_TEXTUREFACTOR,color);}
-    world.elements[14]=n::add32(n::add32(a.base.vector_2c.z,a.vector_5bc.z),a.base.vector_484.z);device.SetTransform(D3DTS_WORLD,reinterpret_cast<D3DMATRIX*>(&world));
-    auto& sprite=current_sprite(e::controller(),a);if(c.cached_texture!=sprite.texture_id){c.cached_texture=sprite.texture_id;flush_textured_quads(c,device);device.SetTexture(0,texture(c,c.cached_texture));}
-    if(c.field_e18!=reinterpret_cast<std::uint32_t>(&sprite)||f(a.base.field_78)!=0.f||f(a.base.field_7c)!=0.f||a.base.vector_68.x!=1.f||a.base.vector_68.y!=1.f){c.field_e18=reinterpret_cast<std::uint32_t>(&sprite);Matrix4 uv=a.base.matrix_3f8;uv.elements[8]=n::add32(a.base.vectors_378[0].x,f(a.base.field_78));uv.elements[9]=n::add32(a.base.vectors_378[0].y,f(a.base.field_7c));uv.elements[0]=n::mul32(uv.elements[0],a.base.vector_68.x);uv.elements[5]=n::mul32(uv.elements[5],a.base.vector_68.y);device.SetTransform(D3DTS_TEXTURE0,reinterpret_cast<D3DMATRIX*>(&uv));}
-    if(c.unknown_cached_e0e!=2){device.SetStreamSource(0,c.corner_buffer,0,20);device.SetFVF(0x102);c.unknown_cached_e0e=2;}select_texture_combine(c,device,1);device.DrawPrimitive(D3DPT_TRIANGLESTRIP,(a.base.flags[5]*3+a.base.flags[4])*4,2);
+    apply_animation_render_state(c,a,device);const auto color=tint(c,((a.base.flags[2]>>10)&7)==0?a.base.field_490:a.base.field_494);if(c.field_e04!=color){flush_textured_quads(c,device);c.field_e04=color;
+#ifdef TH_SDL3
+        device.set_texture_factor(color);
+#else
+        device.SetRenderState(D3DRS_TEXTUREFACTOR,color);
+#endif
+    }
+    world.elements[14]=n::add32(n::add32(a.base.vector_2c.z,a.vector_5bc.z),a.base.vector_484.z);
+#ifdef TH_SDL3
+    device.transform(touhou::graphics::MatrixKind::World,world.elements);
+#else
+    device.SetTransform(D3DTS_WORLD,reinterpret_cast<D3DMATRIX*>(&world));
+#endif
+    auto& sprite=current_sprite(e::controller(),a);if(c.cached_texture!=sprite.texture_id){c.cached_texture=sprite.texture_id;flush_textured_quads(c,device);
+#ifdef TH_SDL3
+        device.bind_texture(texture(c,c.cached_texture));
+#else
+        device.SetTexture(0,texture(c,c.cached_texture));
+#endif
+    }
+    if(c.field_e18!=reinterpret_cast<std::uint32_t>(&sprite)||f(a.base.field_78)!=0.f||f(a.base.field_7c)!=0.f||a.base.vector_68.x!=1.f||a.base.vector_68.y!=1.f){c.field_e18=reinterpret_cast<std::uint32_t>(&sprite);Matrix4 uv=a.base.matrix_3f8;uv.elements[8]=n::add32(a.base.vectors_378[0].x,f(a.base.field_78));uv.elements[9]=n::add32(a.base.vectors_378[0].y,f(a.base.field_7c));uv.elements[0]=n::mul32(uv.elements[0],a.base.vector_68.x);uv.elements[5]=n::mul32(uv.elements[5],a.base.vector_68.y);
+#ifdef TH_SDL3
+        device.transform(touhou::graphics::MatrixKind::Texture,uv.elements);
+#else
+        device.SetTransform(D3DTS_TEXTURE0,reinterpret_cast<D3DMATRIX*>(&uv));
+#endif
+    }
+    if(c.unknown_cached_e0e!=2){
+#ifdef TH_SDL3
+        device.vertex_format(touhou::graphics::VertexLayout::WorldUv);
+#else
+        device.SetStreamSource(0,c.corner_buffer,0,20);device.SetFVF(0x102);
+#endif
+        c.unknown_cached_e0e=2;}select_texture_combine(c,device,1);
+#ifdef TH_SDL3
+    device.draw_corner_strip((a.base.flags[5]*3+a.base.flags[4])*4,2);
+#else
+    device.DrawPrimitive(D3DPT_TRIANGLESTRIP,(a.base.flags[5]*3+a.base.flags[4])*4,2);
+#endif
 }
 }
 }

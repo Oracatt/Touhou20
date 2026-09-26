@@ -100,8 +100,12 @@ public:
     void select_context(int,game_session::Session&) noexcept; //4ab970/4ab930
 };
 #pragma pack(pop)
+// Enemy embeds pmr containers and a std::function; MSVC x86 STL layout
+// evidence, binding on the Windows build only (TH_SDL3 uses libc++ layouts).
+#ifndef TH_SDL3
 static_assert(sizeof(Enemy)==0x428&&offsetof(Enemy,state)==0x88&&offsetof(Enemy,spawn_parameters)==0x378);
 static_assert(offsetof(Enemy,children)==0x3cc&&offsetof(Enemy,callback)==0x3f8&&offsetof(Enemy,context)==0x424);
+#endif
 void retire_enemy(Enemy*);                                   //4a2720
 namespace unrecovered {
 int execute_enemy_opcode_0048c010(EnemyState&);
