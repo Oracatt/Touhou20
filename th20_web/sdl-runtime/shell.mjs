@@ -76,14 +76,14 @@ async function stop(){if(closing)return;closing=true;try{core.sdl_loop_stop();aw
 function launch(){
  if(launched)return;
  ensureSharedFontAlias(Module,language);
- music=Module.touhouMusicMode!=='none';core.sdl_music_enabled(music);app=core.sdl_game_open(language==='chs'?1:0,Date.now()&65535);if(!app)throw Error('C++ game initialization failed');
+ const mode=Module.touhouMusicMode||'none';music=mode!=='none';core.sdl_ogg_decode_mode?.(options.oggDecodeMode==='full');core.sdl_music_enabled(music);app=core.sdl_game_open(language==='chs'?1:0,Date.now()&65535);if(!app)throw Error('C++ game initialization failed');
  applyOptions();launched=true;first=false;lastPresented=0;lastHealth=performance.now();lastFrame=0;frames=0;maxGap=0;
  canvas.focus({preventScroll:true});core.sdl_loop_pause(1);if(!document.hidden)void resumeForegroundAudio();core.sdl_loop_start(app);
  emit('runtime-info',{renderer:'SDL3 / WebGL2 / C++',architecture:'eagler-touhou/1',version:'1.0.0-sdl3'});
 }
 async function command(message){
  switch(message.command){
- case 'configure':if(launched)throw Error('Cannot configure a running game');language=message.language==='lang_zh-hans'?'chs':'jp';options=normalizeOptions(message.options);if(!['dat','none'].includes(message.music))throw Error('Invalid music mode');Module.touhouMusicMode=message.music;Module.eaglerOptions=options;music=message.music!=='none';await installResources(message.sharedResources);await installResources(message.runtimeResources);await installResources(message.resources);if(message.runtimePack)await installRuntimePack(message.runtimePack);applyOptions();return {};
+ case 'configure':if(launched)throw Error('Cannot configure a running game');language=message.language==='lang_zh-hans'?'chs':'jp';options=normalizeOptions(message.options);if(!['ogg','none'].includes(message.music))throw Error('Invalid music mode');Module.touhouMusicMode=message.music;Module.eaglerOptions=options;music=message.music!=='none';await installResources(message.sharedResources);await installResources(message.runtimeResources);await installResources(message.resources);if(message.runtimePack)await installRuntimePack(message.runtimePack);applyOptions();return {};
  case 'resources':await installResources(message.resources);return {};
  case 'keyboard':{const code=runtimeKeyboardCode(message);if(!code)return {};cstring(code,p=>core.sdl_key(p,!!message.down));return {};}
  case 'keyboard-clear':core.sdl_keys_clear();return {};

@@ -9,8 +9,12 @@
 #define MA_NO_FLAC
 #define MA_NO_ENCODING
 #define MA_NO_THREADING
+// File-backed Vorbis is the canonical BGM source. Keeping stb_vorbis in this
+// translation unit gives miniaudio seekable OGG decoding without a JS audio
+// path, following the TH07/TH08/TH10 web runtimes.
+#include "../../../portable/sdl/third_party/stb_vorbis.h"
 #define MINIAUDIO_IMPLEMENTATION
-#include "third_party/miniaudio.h"
+#include "../../../portable/sdl/third_party/miniaudio.h"
 #include "../platform/Audio.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -20,6 +24,8 @@
 #include <exception>
 #include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace th20::web::audio {
 namespace {
@@ -350,7 +356,152 @@ void track_reader(void* reader) { active_reader = reader; }
 void* current_reader() { return active_reader; }
 }
 
-namespace th20::source::audio { void reopen_music_stream_file(); }
+// The retail thbgm.dat byte space is presented as a virtual SDL_IOStream whose
+// per-track regions are decoded from the canonical /bgm-ogg OGG set. The game
+// keeps its own thbgm.fmt archive offsets, loop points and refill worker; only
+// the storage behind those byte ranges changes. Mirrors TH07/TH08/TH10.
+namespace {
+bool music_stream_enabled() { return th20::web::audio::music_is_enabled(); }
+struct MusicEntry { std::uint32_t offset, length; const char* file; };
+// thbgm.fmt order (archive_offset ascending). The final track is a TH128 borrow
+// shipped under its original name; every other track keeps its th20_XX name.
+constexpr MusicEntry music_entries[] = {
+    {16u, 17292480u, "th20_01.ogg"},
+    {17292496u, 23001472u, "th20_02.ogg"},
+    {40293968u, 17432128u, "th20_03.ogg"},
+    {57726096u, 24779200u, "th20_04.ogg"},
+    {82505296u, 24280896u, "th20_05.ogg"},
+    {106786192u, 25786592u, "th20_06.ogg"},
+    {132572784u, 23677952u, "th20_07.ogg"},
+    {156250736u, 29884160u, "th20_08.ogg"},
+    {186134896u, 31100672u, "th20_09.ogg"},
+    {217235568u, 31494144u, "th20_10.ogg"},
+    {248729712u, 26837376u, "th20_11.ogg"},
+    {275567088u, 17296768u, "th20_13.ogg"},
+    {292863856u, 34336192u, "th20_12.ogg"},
+    {327200048u, 32871936u, "th20_17.ogg"},
+    {360071984u, 31570240u, "th20_18.ogg"},
+    {391642224u, 8438912u, "th20_15.ogg"},
+    {400081136u, 12913664u, "th20_14.ogg"},
+    {412994800u, 10054800u, "th20_16.ogg"},
+    {423049600u, 6741184u, "th128_08.ogg"},
+};
+constexpr std::size_t music_track_count = sizeof(music_entries) / sizeof(music_entries[0]);
+constexpr std::uint64_t music_size = std::uint64_t(music_entries[music_track_count - 1].offset) + music_entries[music_track_count - 1].length;
+bool ogg_full = false;
+struct MusicFile;
+std::vector<MusicFile*> music_streams;
+struct MusicFile {
+    std::uint64_t cursor = 0, decoder_frame = 0;
+    int track = -1;
+    SDL_IOStream* source = nullptr;
+    ma_decoder decoder{};
+    std::vector<std::uint8_t> full_pcm;
+    bool valid = false, full_ready = false, waiting = false;
+    ~MusicFile() { music_streams.erase(std::remove(music_streams.begin(), music_streams.end(), this), music_streams.end()); reset(); }
+    void reset() {
+        if (valid) ma_decoder_uninit(&decoder);
+        if (source) SDL_CloseIO(source);
+        source = nullptr; valid = false; full_ready = false; waiting = false; track = -1; full_pcm.clear();
+    }
+    static ma_result read(ma_decoder* d, void* out, std::size_t size, std::size_t* read) {
+        *read = SDL_ReadIO(static_cast<MusicFile*>(d->pUserData)->source, out, size);
+        return *read ? MA_SUCCESS : MA_AT_END;
+    }
+    static ma_result seek(ma_decoder* d, ma_int64 offset, ma_seek_origin origin) {
+        return SDL_SeekIO(static_cast<MusicFile*>(d->pUserData)->source, offset,
+                          origin == ma_seek_origin_start ? SDL_IO_SEEK_SET
+                          : origin == ma_seek_origin_current ? SDL_IO_SEEK_CUR : SDL_IO_SEEK_END) >= 0 ? MA_SUCCESS : MA_BAD_SEEK;
+    }
+    bool select(int n, const MusicEntry& entry) {
+        if (n < 0 || n >= int(music_track_count)) return false;
+        if (track == n && (valid || full_ready)) return true;
+        reset(); track = n;
+        char name[64];
+        std::snprintf(name, sizeof(name), "/bgm-ogg/%s", entry.file);
+        source = SDL_IOFromFile(name, "rb");
+        if (!source) { waiting = true; return false; }
+        auto cfg = ma_decoder_config_init(ma_format_s16, 2, 44100);
+        if (ma_decoder_init(read, seek, this, &cfg, &decoder) != MA_SUCCESS) { reset(); return false; }
+        valid = true; decoder_frame = 0;
+        if (!ogg_full) return true;
+        const auto frames = entry.length / 4;
+        full_pcm.resize(std::size_t(entry.length));
+        std::uint64_t decoded = 0;
+        while (decoded < frames) {
+            ma_uint64 actual = 0;
+            const auto result = ma_decoder_read_pcm_frames(&decoder, full_pcm.data() + std::size_t(decoded) * 4,
+                                                           std::min<std::uint64_t>(4096, frames - decoded), &actual);
+            if ((result != MA_SUCCESS && result != MA_AT_END) || !actual) { reset(); return false; }
+            decoded += actual;
+        }
+        ma_decoder_uninit(&decoder); valid = false; SDL_CloseIO(source); source = nullptr;
+        full_ready = true; waiting = false; return true;
+    }
+    void resource_changed() { if (waiting) { const auto n = track; reset(); track = n; } }
+};
+Sint64 musicSize(void*) { return Sint64(music_size); }
+Sint64 musicSeek(void* user, Sint64 off, SDL_IOWhence origin) {
+    auto& f = *static_cast<MusicFile*>(user);
+    const auto pos = (origin == SDL_IO_SEEK_SET ? Sint64(0) : origin == SDL_IO_SEEK_CUR ? Sint64(f.cursor) : Sint64(music_size)) + off;
+    if (pos < 0) return -1;
+    f.cursor = std::uint64_t(pos); return pos;
+}
+std::size_t musicRead(void* user, void* out, std::size_t size, SDL_IOStatus* status) {
+    auto& f = *static_cast<MusicFile*>(user);
+    auto* dest = static_cast<std::uint8_t*>(out);
+    std::size_t done = 0;
+    *status = SDL_IO_STATUS_READY;
+    if (!music_stream_enabled()) {
+        const auto count = std::min<std::uint64_t>(size, f.cursor < music_size ? music_size - f.cursor : 0);
+        std::memset(out, 0, count); f.cursor += count;
+        if (f.cursor >= music_size) *status = SDL_IO_STATUS_EOF;
+        return count;
+    }
+    while (done < size && f.cursor < music_size) {
+        if (f.cursor < 16) {
+            const auto n = std::min<std::uint64_t>(size - done, 16 - f.cursor);
+            std::memset(dest + done, 0, n); done += n; f.cursor += n; continue;
+        }
+        int n = int(music_track_count) - 1;
+        while (n > 0 && f.cursor < music_entries[n].offset) --n;
+        const auto& t = music_entries[n];
+        if (!f.select(n, t)) {
+            // A managed OGG may arrive after the Runtime starts. Do not turn a
+            // missing optional component into an IO error; the resource-change
+            // export invalidates this pending selection for retry.
+            const auto count = std::min<std::uint64_t>(size - done, t.length - (f.cursor - t.offset));
+            std::memset(dest + done, 0, count); done += count; f.cursor += count; continue;
+        }
+        const auto local = f.cursor - t.offset, frame = local / 4;
+        const std::size_t count = std::size_t(std::min<std::uint64_t>(size - done, t.length - local)), leading = local % 4;
+        if (f.full_ready) { std::memcpy(dest + done, f.full_pcm.data() + local, count); f.cursor += count; done += count; continue; }
+        if (frame != f.decoder_frame && ma_decoder_seek_to_pcm_frame(&f.decoder, frame) != MA_SUCCESS) { *status = SDL_IO_STATUS_ERROR; break; }
+        ma_uint64 actual = 0; const auto frames = (count + leading + 3) / 4;
+        std::vector<std::uint8_t> scratch; void* target = dest + done;
+        if (leading || count % 4) { scratch.resize(frames * 4); target = scratch.data(); }
+        const auto result = ma_decoder_read_pcm_frames(&f.decoder, target, frames, &actual);
+        f.decoder_frame = frame + actual;
+        const auto bytes = std::min<std::uint64_t>(count, actual * 4 > leading ? actual * 4 - leading : 0);
+        if ((result != MA_SUCCESS && result != MA_AT_END) || !bytes) { *status = SDL_IO_STATUS_ERROR; break; }
+        if (!scratch.empty()) std::memcpy(dest + done, scratch.data() + leading, bytes);
+        f.cursor += bytes; done += bytes;
+    }
+    if (f.cursor >= music_size) *status = SDL_IO_STATUS_EOF;
+    return done;
+}
+bool musicClose(void* user) { delete static_cast<MusicFile*>(user); return true; }
+}
+extern "C" SDL_IOStream* th20_music_stream() {
+    SDL_IOStreamInterface iface{};
+    SDL_INIT_INTERFACE(&iface);
+    iface.size = musicSize; iface.seek = musicSeek; iface.read = musicRead; iface.close = musicClose;
+    auto* f = new MusicFile();
+    music_streams.push_back(f);
+    auto* io = SDL_OpenIO(&iface, f);
+    if (!io) { music_streams.pop_back(); delete f; }
+    return io;
+}
 
 extern "C" {
 __attribute__((export_name("sdl_audio_pump"))) void sdl_audio_pump() try { th20::web::audio::pump(); }
@@ -367,22 +518,22 @@ __attribute__((export_name("sdl_audio_event"))) std::uint32_t sdl_audio_event(st
     if (op == 2) { th20::web::audio::close_event(id); return 0; }
     return th20::web::audio::consume_event(id) ? 0 : 0x102;
 }
-// BGM enable follows the TH10 protocol: music keeps its timing and stream
+// BGM enable follows the TH07/TH10 protocol: music keeps its timing and stream
 // state, but the PCM the game reads becomes silence.
 __attribute__((export_name("sdl_music_enabled"))) void sdl_music_enabled(std::uint32_t enabled) { th20::web::audio::music_enabled = enabled != 0; }
 __attribute__((export_name("sdl_music_resource_changed"))) void sdl_music_resource_changed() {
-    // thbgm.dat arrives through the file host; drop the streaming handle so
-    // the next read reopens against the fresh MEMFS bytes.
-    th20::source::audio::reopen_music_stream_file();
+    // A late-arriving OGG invalidates pending selections so the next read
+    // retries against the fresh MEMFS bytes.
+    for (auto* stream : music_streams) stream->resource_changed();
 }
 __attribute__((export_name("sdl_music_stats"))) const std::uint32_t* sdl_music_stats() {
     static std::uint32_t out[6]{};
     out[0] = th20::web::audio::music_is_enabled();
-    out[1] = 0; // no OGG decode mode on this runtime (thbgm.dat is canonical)
-    out[2] = th20::web::audio::current_reader() ? 1 : 0;
+    out[1] = ogg_full ? 1u : 0u;
+    out[2] = std::uint32_t(music_streams.size());
+    out[3] = out[4] = out[5] = 0;
+    for (auto* stream : music_streams) { out[3] += stream->waiting; out[4] += stream->valid; out[5] += stream->full_ready; }
     return out;
 }
-__attribute__((export_name("sdl_ogg_decode_mode"))) void sdl_ogg_decode_mode(std::uint32_t) {
-    // The canonical BGM source is thbgm.dat itself; there is no decode mode.
-}
+__attribute__((export_name("sdl_ogg_decode_mode"))) void sdl_ogg_decode_mode(std::uint32_t full) { ogg_full = full != 0; }
 }

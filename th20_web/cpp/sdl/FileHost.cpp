@@ -10,6 +10,9 @@
 
 EM_JS(void, browser_save_changed, (), { Module['runtimeFileChanged']?.(); });
 
+// Provided by AudioHost.cpp: the retail thbgm.dat byte space backed by OGG.
+extern "C" SDL_IOStream* th20_music_stream();
+
 namespace th20::web::files {
 namespace {
 std::string root = "/savesth20/jp";
@@ -95,6 +98,10 @@ std::uint32_t open(const char* cp932_path, bool write) {
         const auto path = root + "/" + name;
         parents(path);
         io = SDL_IOFromFile(path.c_str(), "wb");
+    } else if (name == "thbgm.dat") {
+        // The canonical BGM source is the /bgm-ogg OGG set, not a retail
+        // thbgm.dat on disk; mirror the TH07/TH08/TH10 web file hosts.
+        io = th20_music_stream();
     } else {
         io = SDL_IOFromFile((root + "/" + name).c_str(), "rb");
         if (!io) io = SDL_IOFromFile(("/game/" + name).c_str(), "rb");

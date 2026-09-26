@@ -94,11 +94,11 @@ export function directTouch(core,canvas,message,viewport) {
  core.sdl_touch(type,id,(x*viewport.width-rect.left)/rect.width,(y*viewport.height-rect.top)/rect.height);
 }
 export function resourcePath(path,game) {
- // TH20 ships no external OGG music (BGM streams from thbgm.dat itself) and no
- // per-game font tables: the resource surface is the BGM data file, shared
- // fonts and offline language packs. Other games keep their original rules.
+ // TH20's canonical BGM is the /bgm-ogg OGG set (the last track keeps its
+ // original th128_08 name) and it ships no per-game font tables, so the
+ // resource surface is OGG, shared fonts and offline language packs.
  if(game==='th20')
-  return typeof path==='string'&&(path==='/game/thbgm.dat'||/^\/fonts\/[a-z0-9_.-]+$/.test(path)||path==='/msgothic.ttc'||path==='/unifont.otf'||(/^\/thcrap\/th20\/[a-z0-9_/.-]+$/.test(path)&&!path.includes('..')&&!path.includes('//')));
+  return typeof path==='string'&&(new RegExp('^/bgm-ogg/(?:th20_[0-9]{2}|th128_08)\\.ogg$').test(path)||/^\/fonts\/[a-z0-9_.-]+$/.test(path)||path==='/msgothic.ttc'||path==='/unifont.otf'||(/^\/thcrap\/th20\/[a-z0-9_/.-]+$/.test(path)&&!path.includes('..')&&!path.includes('//')));
  return typeof path==='string'&&(new RegExp('^/bgm-ogg/'+game+'_(?:[0-9]{2}|13b)\\.ogg$').test(path)||/^\/fonts\/[a-z0-9_.-]+$/.test(path)||path==='/msgothic.ttc'||path==='/unifont.otf'||(new RegExp('^/thcrap/'+game+'/[a-z0-9_/.-]+$').test(path)&&!path.includes('..')&&!path.includes('//')));
 }
 export function ensureSharedFontAlias(Module,language){
