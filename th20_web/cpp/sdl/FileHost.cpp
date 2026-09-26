@@ -154,6 +154,12 @@ bool write_all(const char* cp932_path, const void* data, std::uint32_t bytes) {
     return done == bytes;
 }
 
+bool exists(const char* cp932_path) {
+    const auto handle = open(cp932_path, false);
+    if (!handle) return false;
+    close(handle);
+    return true;
+}
 std::uint32_t list(const char* directory, const char* pattern, std::uint32_t index,
                    char* out, std::uint32_t capacity) {
     const auto dir = normalize(directory);

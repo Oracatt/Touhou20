@@ -2,6 +2,7 @@
 #include "data_constants.hpp"
 #ifdef TH_SDL3
 #include "platform/Time.hpp"
+#include "platform/Files.hpp"
 #endif
 #include "../platform_window/graphics_callbacks.hpp"
 #include "../platform_window/frame_statistics.hpp"
@@ -25,7 +26,13 @@ int __cdecl update_callback(void* object) {return static_cast<LoadingScene*>(obj
 int __cdecl draw_callback(void* object) {return static_cast<LoadingScene*>(object)->draw();} //4d85b0
 bool file_exists(const char* name) {
     std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(2));
+#ifdef TH_SDL3
+    // Loose game files live under the launcher-mounted /game tree; route
+    // through the file host instead of the bare process CWD.
+    return web::files::exists(name);
+#else
     return std::filesystem::exists(name);
+#endif
 }
 }
 LoadingScene::LoadingScene() {

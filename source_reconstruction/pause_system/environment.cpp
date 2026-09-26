@@ -1,3 +1,4 @@
+#include <cstdio>
 #include "pause.hpp"
 #include "capture.hpp"
 #include "../program_entry/program_entry.hpp"
@@ -40,7 +41,11 @@ public:
     void pause_music()override{pe::thread_registry.enqueue(6,0,"Pause");}
     int poll_audio()override{return pe::thread_registry.poll();}
     const char* music_name()override{return pe::thread_registry.queued_track;}
-    double music_position()override{return pe::thread_registry.stream->playback_seconds();}
+    double music_position()override{
+#ifdef TH_SDL3
+        if(!pe::thread_registry.stream){std::fprintf(stderr,"music_position: stream is null\n");return 0;}
+#endif
+        return pe::thread_registry.stream->playback_seconds();}
     void play_game_over_music()override{pe::thread_registry.enqueue(1,0,"th128_08.wav");hud::play_stage_track(0,0);}
     bool dialogue_present()override{return hud::controller->collecting!=nullptr;}
     void show_dialogue(bool visible)override{auto& d=*hud::controller->collecting;for(unsigned i=0;i<4;++i){show_animation(d.portraits[i],visible);show_animation(d.portrait_overlays[i],visible);}for(unsigned i:{0u,1u,2u,3u,4u,5u,7u,6u})show_animation(d.handles[i],visible);}

@@ -1,4 +1,5 @@
 #include "music_stream.hpp"
+#include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <memory>
@@ -194,6 +195,7 @@ int MusicStream::tick_fade(unsigned mode) {
 }
 void update_stream(SoundInf& sound) {if(sound.stream) for(unsigned mode:{1u,2u,4u,3u}) sound.stream->tick_fade(mode);}
 double MusicStream::playback_seconds() {
+    if(!wave||!wave->track) {std::fprintf(stderr,"playback_seconds: wave=%p track=%p\n",static_cast<void*>(wave),wave?static_cast<void*>(wave->track):nullptr);throw std::logic_error("Music stream has no wave track");}
     auto& f=*wave->track;
     const double now=read_clock(*this);
     double elapsed=now-(started_at+paused_duration);

@@ -30,6 +30,8 @@ std::uint32_t tell(std::uint32_t handle);
 
 // Whole-file helpers used by the game services.
 std::optional<std::vector<std::uint8_t>> read_all(const char* cp932_path);
+// Existence check with the same read routing as open(save root, then /game).
+bool exists(const char* cp932_path);
 // Whitelisted write; returns false for disallowed paths or IO failure.
 bool write_all(const char* cp932_path, const void* data, std::uint32_t bytes);
 
