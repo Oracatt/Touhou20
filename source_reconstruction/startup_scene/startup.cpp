@@ -111,7 +111,11 @@ int load_worker() {
                 }
                 initialize_shared_scene_resources();
 #ifdef TH_SDL3
-                while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags)) web::time::sleep(1);
+                // No loader thread exists on the browser runtime: the worker
+                // body IS the main thread, so pump the per-frame background
+                // jobs ourselves until the staged files are ready.
+                while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))
+                    pw::unrecovered::pump_background_jobs(*pe::sprite_controller);
 #else
                 while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags)) Sleep(1);
 #endif

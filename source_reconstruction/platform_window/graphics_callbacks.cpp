@@ -251,6 +251,16 @@ int register_graphics_callbacks() {
     return 0;
 }
 }
+#ifdef TH_SDL3
+namespace th20::source::platform_window::unrecovered {
+void pump_background_jobs(sprite::Controller& controller) {
+    poll_background_jobs(pe::thread_registry);
+    audio::update_stream(pe::thread_registry);
+    update_sprite_tasks(controller);
+    process_surface_copies(controller);
+}
+}
+#endif
 namespace th20::source::program_entry::unrecovered {
 int fn_004de1f0() {return platform_window::register_graphics_callbacks();}
 }

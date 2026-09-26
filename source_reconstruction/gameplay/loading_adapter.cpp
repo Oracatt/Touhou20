@@ -39,6 +39,9 @@ public:
     std::uint32_t new_game_state() override {return pe::graphics_state.field_0b18;}
     void sleep(std::uint32_t milliseconds) override {
 #ifdef TH_SDL3
+        // Inline loading worker: waits are satisfied by the per-frame
+        // background jobs, so pump one round before yielding.
+        pw::unrecovered::pump_background_jobs(*pe::sprite_controller);
         web::time::sleep(milliseconds);
 #else
         Sleep(milliseconds);

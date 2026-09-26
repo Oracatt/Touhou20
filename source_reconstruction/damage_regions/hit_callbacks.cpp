@@ -25,8 +25,16 @@ int default_shot_hit(void* shot,sprite::Controller& sprites){
     return read<int>(shot,0xac);
 }
 int shot_hit_callback(Region& region,const sprite::Vec3& position,const sprite::Vec2* size,float angle,float radius,sprite::Controller& sprites){
-    auto* shot=find_player_shot(region);using Callback=int(__thiscall*)(void*,const sprite::Vec3*,const sprite::Vec2*,float,float);
+    auto* shot=find_player_shot(region);
+#ifdef TH_SDL3
+    // Stored callbacks are __fastcall (Shot*,void* dummy,...) on Windows;
+    // wasm has no register conventions, so the dummy is a real argument here.
+    using Callback=int(*)(void*,void*,const sprite::Vec3*,const sprite::Vec2*,float,float);
+    const auto callback=read<Callback>(shot,0x4c);return callback?callback(shot,nullptr,&position,size,angle,radius):default_shot_hit(shot,sprites);
+#else
+    using Callback=int(__thiscall*)(void*,const sprite::Vec3*,const sprite::Vec2*,float,float);
     const auto callback=read<Callback>(shot,0x4c);return callback?callback(shot,&position,size,angle,radius):default_shot_hit(shot,sprites);
+#endif
 }
 int diminish_shot_hit(Region& region,const sprite::Vec3& position){
     auto* shot=find_player_shot(region);

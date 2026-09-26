@@ -1,4 +1,7 @@
 #include "anm_vm.hpp"
+#ifdef TH_SDL3
+#include "pool.hpp" // AnimationCallback complete type for the virtual update() call
+#endif
 #include "../ecl_vm/math.hpp"
 #include <cmath>
 #include <cstring>
@@ -210,8 +213,16 @@ std::int32_t execute_animation(Animation& a){
     if(b.flags[1]&0x100)scale=1.f;
     if(animation_slowdown(a)>0.f){scale=saved_scale-animation_slowdown(a)*saved_scale;if(scale<0.f)scale=0.f;}
     if(a.fields_550[6]){
+#ifdef TH_SDL3
+        // MSVC vtable order (deleting dtor, update, draw, ...) is not the
+        // Itanium order clang emits for wasm (complete dtor, deleting dtor,
+        // update, ...); the raw table[1] would call the deleting destructor.
+        // A real virtual call lands on update() under both ABIs.
+        if(reinterpret_cast<AnimationCallback*>(a.fields_550[6])->update())return 1;
+#else
         struct Callback {void** table;};auto* cb=reinterpret_cast<Callback*>(a.fields_550[6]);
         if(reinterpret_cast<std::int32_t(__thiscall*)(Callback*)>(cb->table[1])(cb))return 1;
+#endif
     }
     if(a.field_5dc&&reinterpret_cast<std::int32_t(__cdecl*)(Animation*)>(a.field_5dc)(&a))return 1;
     if(n::signed_bits(b.fields_10_28[6])>=0&&!(b.flags[1]&0x2000000)){

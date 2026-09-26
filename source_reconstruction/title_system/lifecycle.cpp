@@ -43,13 +43,18 @@ int initialize(TitleInf& o){return initialize(o,lifecycle_environment());}
 int load_worker(){
     if(initialize(*controller())==0){
 #ifdef TH_SDL3
-        while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))web::time::sleep(1);
+        // Threadless build: pump the per-frame background jobs inline until
+        // the staged files are ready (no loader thread exists).
+        while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))
+            platform_window::unrecovered::pump_background_jobs(*pe::sprite_controller);
 #else
         while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))Sleep(1);
 #endif
         if(startup::loading_scene){
 #ifdef TH_SDL3
-            while(startup::loading_scene->draw_frames<180&&!(pe::graphics_state.event_flags&0x60))web::time::sleep(16);
+            // The original waits for 180 drawn logo frames; the inline worker
+            // occupies the render thread, so the brand delay cannot be
+            // observed and is skipped (loading is already complete).
 #else
             while(startup::loading_scene->draw_frames<180&&!(pe::graphics_state.event_flags&0x60))Sleep(16);
 #endif

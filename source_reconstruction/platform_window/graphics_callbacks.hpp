@@ -18,6 +18,12 @@ extern void (*surface_callback_first)();            // 5c4d30, initialized by4dd
 extern void (*surface_callback_second)();           // 5c4d34
 namespace unrecovered {
 int update_sprite_tasks(sprite::Controller&);       // 44dfb0
+#ifdef TH_SDL3
+// Cooperative pump for the threadless browser build: one round of the
+// per-frame background jobs (audio commands, stream refill, ANM postload,
+// surface-copy requests) so inline workers can spin on their completion.
+void pump_background_jobs(sprite::Controller&);
+#endif
 void initialize_sprite_assets(sprite::Controller&); // 44d020
 sprite::Animation* create_animation_vm();           // 447800
 void draw_animation(sprite::Animation&);            // 44c570 ->443880

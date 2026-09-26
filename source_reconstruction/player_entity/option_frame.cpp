@@ -19,7 +19,13 @@ int update_option(Player& player,Option& option,OptionFrameServices& env){
     if(!(player.entity_flags&2u)){
         if(!(option.fields_f4[3]&2u)){
             const bool focused=player.focused_204c!=0;option.vector_70=add_fixed_coordinates(player.fixed_position,option.offsets_80[focused?1:0]);
+#ifdef TH_SDL3
+            // Stored option callbacks are __fastcall (Option*,void* dummy);
+            // wasm lowers conventions away, so the dummy is a real argument.
+            const auto callback=option.fields_f4[focused?10:11];if(callback)reinterpret_cast<void(*)(Option*,void*)>(callback)(&option,nullptr);
+#else
             const auto callback=option.fields_f4[focused?10:11];if(callback)reinterpret_cast<void(__thiscall*)(Option*)>(callback)(&option);
+#endif
         }
     }else{
         option.vector_70=player.fixed_position;
