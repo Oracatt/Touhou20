@@ -35,8 +35,13 @@ struct TitleInf final:runtime::CallbackOwner {
     TitleInf(); //51db00
     ~TitleInf() override; //51dea0
 };
-static_assert(sizeof(TitleInf)==0x5978&&offsetof(TitleInf,cursor)==0x24&&offsetof(TitleInf,age)==0x154&&offsetof(TitleInf,handle390)==0x390);
+static_assert(offsetof(TitleInf,cursor)==0x24&&offsetof(TitleInf,age)==0x154&&offsetof(TitleInf,handle390)==0x390);
 static_assert(offsetof(TitleInf,data490)==0x490&&offsetof(TitleInf,cursor56e8)==0x56e8&&offsetof(TitleInf,metadata)==0x5740&&offsetof(TitleInf,selection_age)==0x5904&&offsetof(TitleInf,worker)==0x5968);
+// Total size depends on the STL layout (runtime::Worker holds a jthread);
+// binding on the MSVC x86 build only.
+#ifndef TH_SDL3
+static_assert(sizeof(TitleInf)==0x5978);
+#endif
 TitleInf* controller();
 TitleInf* create(); //52cfe0->51d900
 int initialize(TitleInf&); //51f3c0

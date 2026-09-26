@@ -9,7 +9,7 @@ public:
     virtual ~MusicStream();                         // 0x4597b0/stream derived destructor
     virtual HRESULT reset(std::uint32_t);           // 0x45b490
     std::uint32_t retained_04;
-    IDirectSoundBuffer** buffers;                   // +8
+    SoundBuffer** buffers;                   // +8
     std::uint32_t buffer_size;                      // +c
     WaveReader* wave;                              // +10
     std::uint32_t buffer_count;                     // +14
@@ -25,11 +25,11 @@ public:
     std::atomic<std::uint32_t> busy;                // +a4
     SoundInf* sound;                               // source-only +a8
 
-    MusicStream(SoundInf&,IDirectSoundBuffer*,std::uint32_t,WaveReader*,std::uint32_t);
-    HRESULT restore(IDirectSoundBuffer*,BOOL*);     // 0x45b780
-    HRESULT fill(IDirectSoundBuffer*,bool,std::uint32_t); // 0x45a240
-    IDirectSoundBuffer* buffer(unsigned) const;     // 0x45a460
-    IDirectSoundBuffer* free_buffer();              // 0x45a4a0
+    MusicStream(SoundInf&,SoundBuffer*,std::uint32_t,WaveReader*,std::uint32_t);
+    HRESULT restore(SoundBuffer*,BOOL*);     // 0x45b780
+    HRESULT fill(SoundBuffer*,bool,std::uint32_t); // 0x45a240
+    SoundBuffer* buffer(unsigned) const;     // 0x45a460
+    SoundBuffer* free_buffer();              // 0x45a4a0
     HRESULT reset_all_positions();                 // 0x45b410
     HRESULT handle_notification(bool);             // 0x45a580
     HRESULT stop(bool);                            // 0x45bb00

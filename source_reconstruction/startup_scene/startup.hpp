@@ -19,9 +19,13 @@ public:
     int draw();                              // 4d8160
 };
 static_assert(offsetof(LoadingScene,worker)==0x10);
+// Members past the embedded runtime::Worker sit at STL-layout-dependent
+// offsets; binding on the MSVC x86 build only.
+#ifndef TH_SDL3
 static_assert(offsetof(LoadingScene,animation)==0x24);
 static_assert(offsetof(LoadingScene,animation_handle)==0x608);
 static_assert(sizeof(LoadingScene)==0x61c);
+#endif
 extern LoadingScene* loading_scene;            // actualBSSglobal5c4d2c
 LoadingScene* create_loading_scene();           // 4d85c0
 int load_worker();                             // 4d8350

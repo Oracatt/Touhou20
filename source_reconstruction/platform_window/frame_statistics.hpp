@@ -26,7 +26,11 @@ public:
 static_assert(offsetof(FrameStatistics,sample_time)==0x18);
 static_assert(offsetof(FrameStatistics,begin_times)==0x50);
 static_assert(offsetof(FrameStatistics,wall_time_ticks)==0xd0);
+// Total size embeds std::tm (36 bytes under MSVC CRT, larger under musl);
+// binding on the Windows build only.
+#ifndef TH_SDL3
 static_assert(sizeof(FrameStatistics)==0x108);
+#endif
 FrameStatistics* create_frame_statistics(); // 4ac1a0/4abad0
 namespace unrecovered {
 std::uint32_t* current_game_flags();       // 5ba828 nullable object +e8, supplied by game module

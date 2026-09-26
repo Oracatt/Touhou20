@@ -25,7 +25,13 @@ int draw_triangle_fan(s::Controller& c,int count,const s::Vec3& center,const s::
     const auto end=reinterpret_cast<std::uintptr_t>(c.colored_write)+(static_cast<std::uint32_t>(count)+1u)*20u;if(end>=reinterpret_cast<std::uintptr_t>(&c)+0x7d40e80u||count<=2)return 0;
     auto* vertices=c.colored_write;auto& device=s::draw_environment::device();s::flush_textured_quads(c,device);float offset_x,offset_y;std::memcpy(&offset_x,&c.fields_c8[2],4);std::memcpy(&offset_y,&c.fields_c8[3],4);
     for(int i=0;i<count;++i){auto& v=vertices[i];v.x=n::add32(n::add32(points[i].x,center.x),offset_x);v.y=n::add32(n::add32(points[i].y,center.y),offset_y);v.z=0;v.rhw=1;v.color=colors[i];}
-    c.unknown_cached_e0e=1;s::select_texture_combine(c,device,2);device.SetFVF(0x44);device.DrawPrimitiveUP(D3DPT_TRIANGLEFAN,count-2,vertices,20);c.colored_write+=count;++c.draw_calls;return 0;
+    c.unknown_cached_e0e=1;s::select_texture_combine(c,device,2);
+#ifdef TH_SDL3
+    device.vertex_format(touhou::graphics::VertexLayout::ScreenColor);device.draw(touhou::graphics::Topology::Fan,count-2,vertices,20);
+#else
+    device.SetFVF(0x44);device.DrawPrimitiveUP(D3DPT_TRIANGLEFAN,count-2,vertices,20);
+#endif
+    c.colored_write+=count;++c.draw_calls;return 0;
 }
 void RingGeometry::draw(const s::Vec3& p,bool filled){auto& c=s::draw_environment::controller();if(filled)draw_triangle_fan(c,60,p,positions,colors);else draw_polyline(c,60,p,positions,colors);}
 template<std::size_t N> RingEffect<N>::RingEffect(s::Animation& a):AttachedCallback(a),rings{},field_after_rings(0),age{},view_index(0){}

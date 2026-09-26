@@ -37,7 +37,13 @@ int update(NoticeInf& o){
     else if(o.state==1)switch(o.substate){
     case 0:o.cursor.count=99;o.cursor.select(o.selected_index);o.cursor.wrapping=1;help::clear_texture(o.file->textures[1]);o.substate=1;effect(83);show(o);break;
     case 3:
-        help::replace_texture_image(o.file->textures[1],o.image_bytes,o.image_size,1,false);if(o.image_bytes){runtime::release_bytes(o.image_bytes);o.image_bytes=nullptr;}o.image_bytes=nullptr;o.file->textures[1].texture->PreLoad();spawn(o,0);spawn(o,4);o.substate=4;recovered::timer_set(o.age,0);
+        help::replace_texture_image(o.file->textures[1],o.image_bytes,o.image_size,1,false);if(o.image_bytes){runtime::release_bytes(o.image_bytes);o.image_bytes=nullptr;}o.image_bytes=nullptr;
+#ifdef TH_SDL3
+        web::shared_device().preload(o.file->textures[1].texture);
+#else
+        o.file->textures[1].texture->PreLoad();
+#endif
+        spawn(o,0);spawn(o,4);o.substate=4;recovered::timer_set(o.age,0);
         [[fallthrough]];
     case 4:
         if(o.age.current>=20&&pressed()){o.state=2;o.substate=0;recovered::timer_set(o.age,0);effect(7);o.cursor.move(1);interrupt(o,4);interrupt(o,0);}break;

@@ -50,6 +50,6 @@ void begin_resource_load(Script& o){
     std::atomic_ref(o.flags).fetch_or(4u);o.pending_file=reinterpret_cast<const char*>(o.instruction+8);o.pending_slot=slot;
     std::lock_guard lock(runtime::shared_locks().slot(6));{std::lock_guard nested(runtime::shared_locks().slot(6));if(o.worker.thread.joinable())o.worker.thread.detach();}o.worker.close_requested.store(false);
     //Original4a0a00 resolves the active EndingInf at worker execution time.
-    o.worker.thread=std::jthread([]{load_pending_resource(*controller()->script);});
+    o.worker.thread=TH20_WORKER_THREAD("ending-resource",[]{load_pending_resource(*controller()->script);});
 }
 }

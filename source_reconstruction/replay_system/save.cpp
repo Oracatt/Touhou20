@@ -3,6 +3,9 @@
 #include "../archive/resource_manager.hpp"
 #include "../progress_state/compression.hpp"
 #include "../progress_state/records.hpp"
+#ifdef TH_SDL3
+#include "platform/Files.hpp"
+#endif
 #include "../gameplay/player_state.hpp"
 #include "../program_entry/program_entry.hpp"
 #include "../platform_window/frame_statistics.hpp"
@@ -34,7 +37,11 @@ Bytes user_text(ReplayInf& o,int first,int last){
     bytes.push_back(0);bytes.resize((bytes.size()+3u)&~3u,0);progress::write(bytes.data(),4,static_cast<std::uint32_t>(bytes.size()));return bytes;
 }
 Bytes comment_text(){Bytes bytes(12,0);progress::write(bytes.data(),0,0x52455355u);bytes[8]=1;format(bytes,data::s_00573624);bytes.push_back(0);bytes.resize((bytes.size()+3u)&~3u,0);progress::write(bytes.data(),4,static_cast<std::uint32_t>(bytes.size()));return bytes;}
+#ifdef TH_SDL3
+void write(std::uint32_t handle,const void* bytes,DWORD count){if(!handle)return;const auto written=web::files::write(handle,bytes,count);if(written!=count)web::files::close(handle);}
+#else
 void write(HANDLE handle,const void* bytes,DWORD count){if(handle==INVALID_HANDLE_VALUE)return;DWORD written=0;WriteFile(handle,bytes,count,&written,nullptr);if(written!=count)CloseHandle(handle);}
+#endif
 }
 void save(ReplayInf& o,const char* filename,const char* name,int,int append_terminator){
     strcpy_s(reinterpret_cast<char*>(o.user),9,name);for(std::size_t n=std::strlen(name);n<8;++n)reinterpret_cast<char*>(o.user)[n]=' ';
@@ -53,11 +60,21 @@ void save(ReplayInf& o,const char* filename,const char* name,int,int append_term
     Bytes packed;resources::with_shared_dictionary([&](auto& dictionary){progress::LzssEncoder encoder(dictionary);packed=encoder.encode(unpacked);});
     const auto length=static_cast<std::uint32_t>(packed.size());progress::encrypt(packed,{0x7d,0x3a,0x100,length});progress::encrypt(packed,{0x5c,0xe1,0x400,length});
     o.header->unpacked_size=static_cast<unsigned>(unpacked.size());o.header->packed_size=length;o.header->field_0c=length+0x30u;
-    const auto path=(std::filesystem::path(program_entry::window_state.user_data_directory)/"replay"/filename).string();wchar_t wide_path[MAX_PATH+2]{};MultiByteToWideChar(932,0,path.c_str(),-1,wide_path,MAX_PATH);
-    std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(2));HANDLE file=CreateFileW(wide_path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+    const auto path=(std::filesystem::path(program_entry::window_state.user_data_directory)/"replay"/filename).string();
+    std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(2));
+#ifdef TH_SDL3
+    const auto file=web::files::open(path.c_str(),true);
+    write(file,o.header,0x30);write(file,packed.data(),length);
+    auto metadata=user_text(o,first,last);write(file,metadata.data(),static_cast<DWORD>(metadata.size()));auto comment=comment_text();write(file,comment.data(),static_cast<DWORD>(comment.size()));
+    if(file)web::files::close(file);
+#else
+    wchar_t wide_path[MAX_PATH+2]{};MultiByteToWideChar(932,0,path.c_str(),-1,wide_path,MAX_PATH);
+    HANDLE file=CreateFileW(wide_path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(file==INVALID_HANDLE_VALUE){wchar_t* message=nullptr;FormatMessageW(0x1300,nullptr,GetLastError(),0x400,reinterpret_cast<LPWSTR>(&message),0,nullptr);LocalFree(message);}
     write(file,o.header,0x30);write(file,packed.data(),length);
     auto metadata=user_text(o,first,last);write(file,metadata.data(),static_cast<DWORD>(metadata.size()));auto comment=comment_text();write(file,comment.data(),static_cast<DWORD>(comment.size()));
-    if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);o.flags|=1u;
+    if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);
+#endif
+    o.flags|=1u;
 }
 }

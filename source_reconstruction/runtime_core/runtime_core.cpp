@@ -2,6 +2,8 @@
 #define NOMINMAX
 #include <Windows.h>
 #include "runtime_core.hpp"
+#include <cstdio>
+#include <cstdio>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -69,10 +71,16 @@ void finish_log(Log& log) {
     if (log.text.empty()) return;
     log_printf(log, "---------------------------------------------------------- \r\n");
     if (log.error) {
+#ifdef TH_SDL3
+        // The error log is the whole channel on the browser runtime (stderr
+        // reaches the page console); there is no modal dialog to block on.
+        std::fprintf(stderr, "%s\n", log.text.c_str());
+#else
         wchar_t buffer[8000];
         const auto converted = MultiByteToWideChar(932, 0, log.text.c_str(), -1, buffer, 8000);
         if (!converted) throw std::runtime_error("Log text exceeds the original 8000-character CP932 display buffer");
         MessageBoxW(nullptr, buffer, L"log", MB_ICONERROR);
+#endif
     }
 }
 scheduler::State* create_scheduler() {

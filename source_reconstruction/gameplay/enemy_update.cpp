@@ -60,8 +60,15 @@ int advance_enemy_scripts(EnemyState& state,EnemyUpdateServices& host) {
     if(host.move(state)!=0)return -1;
     if(host.run_scripts(state.entity,host.script_delta(state.timer_a8))!=0)return -1;
     if(state.fields_2c8[6]) {
+#ifdef TH_SDL3
+        // Stored callbacks are __fastcall (EnemyState*,void* dummy); wasm
+        // lowers conventions away, so the dummy is a real argument here.
+        const auto callback=reinterpret_cast<int(*)(EnemyState*,void*)>(state.fields_2c8[6]);
+        if(callback(&state,nullptr)!=0)return -1;
+#else
         const auto callback=reinterpret_cast<int(__thiscall*)(EnemyState*)>(state.fields_2c8[6]);
         if(callback(&state)!=0)return -1;                    //004ab54e ECX=EnemyState
+#endif
     }
     return 0;
 }

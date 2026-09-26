@@ -24,7 +24,12 @@ public:
 private:
     void launch(void(SaveManager::*)()); //50ab10 + standard jthread wrappers
 };
-static_assert(offsetof(SaveManager,backup)==0x92140 && offsetof(SaveManager,worker)==0x1242c4 && sizeof(SaveManager)==0x1242d8);
+static_assert(offsetof(SaveManager,backup)==0x92140 && offsetof(SaveManager,worker)==0x1242c4);
+// Total size depends on the STL layout (worker holds a jthread); binding on
+// the MSVC x86 build only.
+#ifndef TH_SDL3
+static_assert(sizeof(SaveManager)==0x1242d8);
+#endif
 extern SaveManager* manager; //5c6108, unique actual source storage
 Profile* current_profile(SaveManager&) noexcept; //50fc50, preserves4bd460 null for invalid selectors
 Profile& fallback_profile(SaveManager&) noexcept; //488700: current.profiles[18], not backup Snapshot

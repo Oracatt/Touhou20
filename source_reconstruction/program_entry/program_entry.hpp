@@ -13,6 +13,7 @@
 #include "../runtime_core/runtime_core.hpp"
 #include "../runtime_core/callback_owner.hpp"
 #include "../sprite_renderer/sprite.hpp"
+#include "device.hpp"
 
 namespace th20::source::audio { struct SoundInf; }
 namespace th20::source::program_entry {
@@ -92,7 +93,7 @@ struct ViewportState {                         // 0x16c, constructor0x00471790
 struct alignas(8) GraphicsStatePrefix {         // original storage 0x005c4d40
     void* unknown_0000;
     IDirect3D9* direct3d;                       // +0x0004
-    IDirect3DDevice9* device;                   // +0x0008
+    Device* device;                             // +0x0008
     RECT window_rectangle;                     // +0x000c
     DIDEVCAPS input_device_caps;                // +0x001c, 0x4219d0 GetCapabilities
     HWND window_handle;                        // +0x0048
@@ -188,7 +189,11 @@ bool needs_device_reset(const WindowStatePrefix&) noexcept;          // 0x0041d0
 void set_draw_counter(WindowStatePrefix&, std::uint8_t) noexcept;    // 0x0041dcc0
 void set_device_reset(WindowStatePrefix&, std::uint32_t) noexcept;   // 0x0041de00
 void set_reset_delay(WindowStatePrefix&, std::uint32_t) noexcept;    // 0x0041de30
+#ifndef TH_SDL3
 IDirect3DDevice9* device(const GraphicsStatePrefix&) noexcept;        // 0x00412730
+#else
+Device* device(const GraphicsStatePrefix&) noexcept;                  // 0x00412730
+#endif
 BOOL is_windowed(const GraphicsStatePrefix&) noexcept;               // 0x00415800
 void release_device(GraphicsStatePrefix&);                          // 0x0041a240
 void release_direct3d(GraphicsStatePrefix&);                        // 0x0041a200

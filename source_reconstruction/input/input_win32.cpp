@@ -1,10 +1,13 @@
 #include "input.hpp"
+#ifndef TH_SDL3
 #include <wbemidl.h>
+#endif
 #include <cwchar>
 #include <cstring>
 #include <stdexcept>
 
 namespace th20::source::input {
+#ifndef TH_SDL3
 BOOL Host::keyboard(std::uint8_t* output) { return GetKeyboardState(output); }
 BOOL Host::set_keyboard(std::uint8_t* input) { return SetKeyboardState(input); }
 DWORD Host::xinput(DWORD index, XINPUT_STATE* output) { return XInputGetState(index,output); }
@@ -14,6 +17,11 @@ HRESULT Host::poll(IDirectInputDevice8W* device) { return device->Poll(); }
 HRESULT Host::acquire(IDirectInputDevice8W* device) { return device->Acquire(); }
 HRESULT Host::device_state(IDirectInputDevice8W* device, DIJOYSTATE2* output) { return device->GetDeviceState(sizeof *output,output); }
 Host& win32_host() { static Host instance; return instance; }
+#else
+Host& sdl_input_host();
+Host& win32_host() { return sdl_input_host(); }
+IDirectInputDevice8W* host_pad(unsigned index);
+#endif
 LegacyState& shared_state() { static LegacyState state; return state; }
 Controller* controller=nullptr;
 
@@ -26,6 +34,7 @@ bool matches_xinput_device_id(const wchar_t* text, std::uint32_t product) {
     if(position && swscanf_s(position,L"PID_%4X",&device)!=1) device=0;
     return ((vendor&0xffff)|((device&0xffff)<<16))==product;
 }
+#ifndef TH_SDL3
 bool is_xinput_product(const GUID& product) {
     const HRESULT initialized=CoInitialize(nullptr);
     IWbemLocator* locator=nullptr;
@@ -68,9 +77,11 @@ bool is_xinput_product(const GUID& product) {
     if(SUCCEEDED(initialized)) CoUninitialize();
     return found;
 }
+#endif
 namespace {
 constexpr char unavailable[]="\x82\xaa\x8e\x67\x97\x70\x82\xc5\x82\xab\x82\xdc\x82\xb9\x82\xf1\r\n";
 constexpr char initialized_text[]="DirectInput \x82\xcd\x90\xb3\x8f\xed\x82\xc9\x8f\x89\x8a\xfa\x89\xbb\x82\xb3\x82\xea\x82\xdc\x82\xb5\x82\xbd\r\n";
+#ifndef TH_SDL3
 BOOL CALLBACK set_axis_range(const DIDEVICEOBJECTINSTANCEW* object, void* userdata) {
     if(object->dwType&3) {
         DIPROPRANGE range{};
@@ -90,6 +101,7 @@ BOOL CALLBACK enumerate_gamepad(const DIDEVICEINSTANCEW* instance, void* userdat
     }
     return DIENUM_STOP;
 }
+#endif
 }
 Controller::Controller(ControllerContext& injected) : frame(0),device_count(0),last_input_kind(0),direct_input(nullptr),devices{},keyboard(nullptr),
     gamepads{},selected{},frame_input_kind(0),retained_2e30(0),retained_2e34(0),mappings{},context(&injected) {
@@ -104,18 +116,27 @@ Controller::~Controller() {
     controller=nullptr;
 }
 void Controller::release_direct_input() {
+#ifndef TH_SDL3
     if(direct_input) { direct_input->Release(); direct_input=nullptr; }
+#else
+    direct_input=nullptr; // SDL gamepads are owned by the input host
+#endif
 }
 void Controller::shutdown_devices() {
     std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(15));
     device_count=0;
     for(auto& device:devices) reset_device_header(device);
+#ifndef TH_SDL3
     if(keyboard) {
         keyboard->Unacquire(); keyboard->Release(); keyboard=nullptr;
     }
     for(auto& pad:gamepads) if(pad) {
         pad->Unacquire(); pad->Release(); pad=nullptr;
     }
+#else
+    keyboard=nullptr;
+    for(auto& pad:gamepads) pad=nullptr;
+#endif
     release_direct_input();
 }
 int Controller::initialize() {
@@ -140,6 +161,8 @@ void Controller::rebuild_devices() {
 }
 int Controller::initialize_direct_input() {
     const auto failure=[&](const char* prefix) { runtime::log_printf(context->log,"%s %s",prefix,unavailable); return -1; };
+    (void)failure;
+#ifndef TH_SDL3
     if(FAILED(DirectInput8Create(context->instance,0x800,IID_IDirectInput8W,reinterpret_cast<void**>(&direct_input),nullptr))) {
         direct_input=nullptr; return failure("DirectInput");
     }
@@ -154,19 +177,31 @@ int Controller::initialize_direct_input() {
     }
     keyboard->Acquire(); runtime::log_printf(context->log,"%s",initialized_text);
     direct_input->EnumDevices(DI8DEVCLASS_GAMECTRL,enumerate_gamepad,this,DIEDFL_ATTACHEDONLY);
+#else
+    // SDL gamepads enumerate as DirectInput-kind devices (keyboard is kind 0
+    // and was already registered by rebuild_devices).
+    for(unsigned i=0;i<4;++i) gamepads[i]=host_pad(i);
+    runtime::log_printf(context->log,"%s",initialized_text);
+#endif
     for(unsigned i=0;i<4;++i) if(gamepads[i]) {
+#ifndef TH_SDL3
         gamepads[i]->EnumObjects(set_axis_range,gamepads[i],0);
+#endif
         initialize_direct_input_device(i,device_count); ++device_count;
     }
     return 0;
 }
 void Controller::initialize_direct_input_device(unsigned physical, int logical) {
     auto* pad=gamepads[physical]; if(!pad) return;
+#ifndef TH_SDL3
     pad->SetDataFormat(&c_dfDIJoystick2);
     pad->SetCooperativeLevel(context->window,10);
     context->capabilities.dwSize=sizeof(DIDEVCAPS); pad->GetCapabilities(&context->capabilities);
     auto& device=devices[logical]; device.direct_input=pad;
     pad->EnumObjects(set_axis_range,pad,0);
+#else
+    auto& device=devices[logical]; device.direct_input=pad;
+#endif
     runtime::log_printf(context->log,"\x97\x4c\x8c\xf8\x82\xc8\x83\x70\x83\x62\x83\x68\x82\xf0\x94\xad\x8c\xa9\x82\xb5\x82\xdc\x82\xb5\x82\xbd\r\n");
     device.kind=1; device.xinput_index=-1; device.logical_index=logical;
 }

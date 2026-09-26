@@ -9,7 +9,8 @@ Testing/
 
 # Original assets, downloaded tools, and regenerable analysis databases.
 /.cache/
-/third_party/
+/third_party/*
+!/third_party/eagler-common
 /reference/
 /assets/
 /analysis/*
@@ -57,6 +58,7 @@ userdata/
 __pycache__/
 *.pyc
 /tools/*.zip
+/tools/emsdk/
 
 # Keep small diagnostic evidence, but not runtime binaries/dumps/user data.
 /source_reconstruction/diagnostics/*/*
@@ -67,3 +69,9 @@ __pycache__/
 !/source_reconstruction/diagnostics/third_run/debugger.log
 !/source_reconstruction/diagnostics/asan_interception_probe2/debugger.log
 !/source_reconstruction/diagnostics/asan_after_enemy_fix/debugger.log
+
+# Local scratch (wasm port logs).
+/temp/
+
+# Emscripten wasm build intermediates and outputs.
+/th20_web/artifacts/

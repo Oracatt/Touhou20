@@ -1,4 +1,7 @@
 #include "loading_dependencies.hpp"
+#ifdef TH_SDL3
+#include "platform/Time.hpp"
+#endif
 #include "enemy.hpp"
 #include "../program_entry/program_entry.hpp"
 #include "../platform_window/graphics_callbacks.hpp"
@@ -34,7 +37,16 @@ public:
     bool sprite_task_pending() override {return static_cast<std::int32_t>(std::atomic_ref(pe::sprite_controller->draw_state[0][0]).load(std::memory_order_relaxed))>=0;}
     std::uint32_t graphics_events() override {return std::atomic_ref(pe::graphics_state.event_flags).load(std::memory_order_relaxed);}
     std::uint32_t new_game_state() override {return pe::graphics_state.field_0b18;}
-    void sleep(std::uint32_t milliseconds) override {Sleep(milliseconds);}
+    void sleep(std::uint32_t milliseconds) override {
+#ifdef TH_SDL3
+        // Inline loading worker: waits are satisfied by the per-frame
+        // background jobs, so pump one round before yielding.
+        pw::unrecovered::pump_background_jobs(*pe::sprite_controller);
+        web::time::sleep(milliseconds);
+#else
+        Sleep(milliseconds);
+#endif
+    }
     void interrupt_surface(unsigned index,bool execute) override {
         auto& animation=*pe::graphics_state.surface_sprites[index];sprite::set_animation_interrupt(animation,2);
         if(execute)sprite::execute_animation(animation);

@@ -1,5 +1,8 @@
 #include "hud.hpp"
 #include "dialogue.hpp"
+#ifdef TH_SDL3
+#include "platform/Time.hpp"
+#endif
 #include "../program_entry/program_entry.hpp"
 #include "../runtime_core/worker.hpp"
 #include "../sprite_renderer/animation_file.hpp"
@@ -41,7 +44,11 @@ int initialize_stage(FrontInf& owner){
     recovered::timer_set(owner.age,0);owner.score=gameplay::player_state::score(game_session::session.player_table.players[0]);owner.message_index=-1;owner.field_1cc=-1;return 0;
 }
 int initialize(FrontInf& owner){
+#ifdef TH_SDL3
+    while(shared_ready.load(std::memory_order_relaxed)==0)web::time::sleep(10);
+#else
     while(shared_ready.load(std::memory_order_relaxed)==0)Sleep(10);
+#endif
     owner.front_file=load(5,"fronttr.anm");if(!owner.front_file){load_error();return -1;}
     if(initialize_stage(owner)!=0)return -1;
     auto& c=*pe::function_controller;auto& e=pe::scheduler_environment;

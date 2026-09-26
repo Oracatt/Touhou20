@@ -62,7 +62,12 @@ struct Log {
     std::pmr::string text;
     std::uint8_t error = 0;
 };
+// MSVC x86 STL layout evidence (pmr::string is 28 bytes there, 16 under
+// libc++/wasm32). Binding on the Windows build; TH_SDL3 recompiles everything
+// consistently with libc++ layouts.
+#ifndef TH_SDL3
 static_assert(sizeof(std::pmr::string) == 28 && sizeof(Log) == 32);
+#endif
 void clear_log(Log&) noexcept;                                // 0x419be0/0x41c0e0
 void append_log(Log&, const char*);                           // 0x4530a0/0x454310
 void log_vprintf(Log&, bool error, const char*, std::va_list); // 0x454150/0x454230

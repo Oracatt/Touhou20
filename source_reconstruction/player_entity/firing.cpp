@@ -82,7 +82,13 @@ int initialize_shot(Shot& shot,std::uint32_t packed,int frame,const sprite::Vec3
     auto& damage_handle=shot.fields_b8[(0xdc-0xb8)/4];damage_handle=host.create_damage(*shot.context,shot);
     if(auto* region=host.damage(damage_handle)){region->hit_callback=1;region->field_90=std::bit_cast<std::int32_t>(shot.flags);region->flags=(region->flags&~0x40u)|0x40u;}
     shot.fields_3c[0]|=1;
+#ifdef TH_SDL3
+    // Stored initializer is __fastcall (Shot*,void* dummy,int) on Windows;
+    // wasm lowers conventions away, so pass the dummy as a real argument.
+    if(callbacks.initialize&&reinterpret_cast<int(*)(Shot*,void*,int)>(callbacks.initialize)(&shot,nullptr,frame)!=0){host.retire(shot);return -1;}
+#else
     if(callbacks.initialize&&reinterpret_cast<ShotInitializeCallback>(callbacks.initialize)(&shot,frame)!=0){host.retire(shot);return -1;}
+#endif
     if(record.sound>=0)host.sound_at(record.sound,shot.motion.position.x);
     animation.vector_5bc=shot.motion.position;return 0;
 }

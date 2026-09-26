@@ -1,9 +1,13 @@
 #include "fonts.hpp"
 #include "data_constants.hpp"
 #include <cwchar>
+#ifdef TH_SDL3
+#include "platform/Fonts.hpp"
+#endif
 
 namespace th20::source::platform_window {
 std::uint8_t font_available[3]{};
+#ifndef TH_SDL3
 HFONT fonts[22]{};
 std::uint8_t* current_font_probe=nullptr;
 int CALLBACK mark_font_available(const LOGFONTW*,const TEXTMETRICW*,DWORD,LPARAM) {
@@ -41,6 +45,28 @@ void initialize_fonts() {
     fonts[18]=create_font(15,400,gothic);fonts[19]=create_font(15,400,gothic);
     // Original does not write slot 12, or slots 0/1 in fallback branches.
 }
+#else
+FontSlot font_slots[22]{};
+void initialize_fonts() {
+    web::fonts::initialize();
+    font_available[0]=web::fonts::available(web::fonts::gothic)?1:0;
+    font_available[2]=web::fonts::available(web::fonts::mincho)?1:0;
+    // Same slot geometry as the original fallback branches; family selects the
+    // FreeType face (mincho falls back to the gothic face when absent).
+    constexpr int modern_heights[12]={24,30,36,42,48,54,60,66,72,90,96,48};
+    constexpr int legacy_heights[10]={24,28,32,36,40,44,48,60,64,32};
+    if(font_available[0]) {
+        for(int index=2;index<12;++index) font_slots[index]={modern_heights[index],index==11?600:400,web::fonts::gothic};
+    } else {
+        for(int index=2;index<12;++index) font_slots[index]={legacy_heights[index-2],index==11?600:400,web::fonts::gothic};
+    }
+    constexpr int mincho_heights[5]={32,40,48,60,64};
+    for(int index=0;index<5;++index) font_slots[index+13]={mincho_heights[index],700,web::fonts::mincho};
+    font_slots[20]={15,700,web::fonts::mincho};font_slots[21]={15,700,web::fonts::mincho};
+    font_slots[18]={15,400,web::fonts::gothic};font_slots[19]={15,400,web::fonts::gothic};
+    // Original does not write slot 12, or slots 0/1 in fallback branches.
+}
+#endif
 }
 namespace th20::source::program_entry::unrecovered {
 void fn_00416d20() {platform_window::initialize_fonts();}

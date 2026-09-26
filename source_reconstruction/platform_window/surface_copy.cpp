@@ -9,17 +9,24 @@ void copy_render_surface(sprite::Controller& controller,const std::uint32_t (&re
     auto* texture=controller.files[request[0]]->textures[request[1]].texture;
     if(!texture) return;
     sprite::flush_textured_quads(controller,*program_entry::graphics_state.device);
-    IDirect3DSurface9* destination;
     texture=controller.files[request[0]]->textures[request[1]].texture;
+    RECT source_rect{coordinate(request[2]),coordinate(request[3]),coordinate(request[2]+request[4]),coordinate(request[3]+request[5])};
+    RECT destination_rect{coordinate(request[6]),coordinate(request[7]),coordinate(request[6]+request[8]),coordinate(request[7]+request[9])};
+#ifdef TH_SDL3
+    auto* source=reinterpret_cast<DeviceTexture*>(program_entry::graphics_state.resource_01a4);
+    if(directx::copy_surface(texture,destination_rect,source,source_rect)==0) {
+        web::shared_device().add_dirty_rect(texture);
+    }
+#else
+    IDirect3DSurface9* destination;
     if(texture->GetSurfaceLevel(0,&destination)==D3D_OK) {
-        RECT source_rect{coordinate(request[2]),coordinate(request[3]),coordinate(request[2]+request[4]),coordinate(request[3]+request[5])};
-        RECT destination_rect{coordinate(request[6]),coordinate(request[7]),coordinate(request[6]+request[8]),coordinate(request[7]+request[9])};
         const auto source=static_cast<IDirect3DSurface9*>(program_entry::graphics_state.resource_01a4);
         if(directx::copy_surface(destination,destination_rect,source,source_rect)==D3D_OK) {
             controller.files[request[0]]->textures[request[1]].texture->AddDirtyRect(nullptr);
         }
         destination->Release();
     }
+#endif
 }
 void process_surface_copies(sprite::Controller& controller) { // 41bfc0
     for(auto& request:controller.draw_state) {

@@ -1,6 +1,9 @@
 #include "text.hpp"
 #include "../program_entry/program_entry.hpp"
 #include "../platform_window/fonts.hpp"
+#ifdef TH_SDL3
+#include "platform/Fonts.hpp"
+#endif
 #include <cstring>
 #include <cwchar>
 namespace th20::source::text {
@@ -45,10 +48,16 @@ void Renderer::enqueue_task(std::function<void()> function) {
     std::lock_guard lock(runtime::shared_locks().slot(18));pending_tasks.push_back(std::move(function));
 }
 Point measure_text(const char* cp932,std::int32_t font) {
+#ifdef TH_SDL3
+    const auto& slot=platform_window::font_slots[font];int cx=0,cy=0;
+    web::fonts::measure(cp932,slot.height,slot.family,cx,cy);
+    return {add(cx,4),add(cy,4)};
+#else
     WCHAR text[258];std::memset(text,0,0x202);MultiByteToWideChar(932,0,cp932,-1,text,256);
     auto dc=GetDC(pe::window_state.window);auto previous=SelectObject(dc,platform_window::fonts[font]);SIZE size;
     GetTextExtentPoint32W(dc,text,static_cast<int>(std::wcslen(text)),&size);size.cx=add(size.cx,4);size.cy=add(size.cy,4);SelectObject(dc,previous);
     // The specimen4156e0 does not call ReleaseDC; preserve its actual lifetime.
     return {size.cx,size.cy};
+#endif
 }
 }

@@ -29,7 +29,7 @@ int draw_display(Effect&); //424e00 modes0/5
 int draw_playfield(Effect&); //424e80 mode7
 int draw_current_view(Effect&); //424f30 modes2/3/6/9
 int draw_offset_playfield(Effect&); //424fa0 mode4
-void draw_rectangle(sprite::Controller&,IDirect3DDevice9&,const float (&bounds)[4],std::uint32_t color); //423650
+void draw_rectangle(sprite::Controller&,Device&,const float (&bounds)[4],std::uint32_t color); //423650
 namespace environment {
 bool cancelled(); //5ba518
 const std::uint32_t* game_flags(); //nullable5ba828+e8

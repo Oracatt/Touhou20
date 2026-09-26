@@ -2,6 +2,7 @@
 #include "../runtime_core/callback_owner.hpp"
 #include "../runtime_core/worker.hpp"
 #include "../platform_services/configuration.hpp"
+#include "../program_entry/device.hpp"
 #include "../../native_recovered/native_core.hpp"
 #include <d3d9.h>
 
@@ -22,7 +23,7 @@ class Services {
 public:
     virtual ~Services()=default;
     virtual std::uint32_t& input_latch()=0;               // 5b8858 = WindowState+2100
-    virtual IDirect3DDevice9& device()=0;                 // 412730 on GraphicsState
+    virtual Device& device()=0;                           // 412730 on GraphicsState
     virtual runtime::Worker& worker()=0;                 // 5c5ad0 = GraphicsState+d90
     virtual std::uint32_t& session_flags()=0;             // GameSession+6c
     virtual std::int32_t session_mode()=0;                // GameSession+70

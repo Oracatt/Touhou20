@@ -9,7 +9,11 @@
 namespace th20::source::startup::unrecovered {runtime::CallbackOwner* owner_005c5b38=nullptr;}
 namespace th20::source::notice {
 namespace pe=program_entry;
+// Message embeds pmr::string members; MSVC x86 STL layout evidence, binding
+// on the Windows build only.
+#ifndef TH_SDL3
 static_assert(sizeof(Message)==0x38);
+#endif
 std::array<Message,25> messages=[] {
     std::array<Message,25> value;
     value[0]={"no notice","no notice"};
@@ -33,7 +37,7 @@ namespace {
 void launch(){ //4b99f0 /40b1d0 shared Graphics worker
     std::lock_guard<std::recursive_mutex> outer(runtime::shared_locks().slot(6));std::lock_guard<std::recursive_mutex> inner(runtime::shared_locks().slot(6));auto& w=worker();
     {std::lock_guard<std::recursive_mutex> detach(runtime::shared_locks().slot(6));if(w.thread.joinable())w.thread.detach();}
-    w.close_requested.store(false,std::memory_order_seq_cst);w.thread=std::jthread(load_file);
+    w.close_requested.store(false,std::memory_order_seq_cst);w.thread=TH20_WORKER_THREAD("notice",load_file);
 }
 int __cdecl update_callback(void* o){return update(*static_cast<NoticeInf*>(o));}
 int __cdecl draw_callback(void*){return 1;} //49dea0 ->478bf0, original literal return1

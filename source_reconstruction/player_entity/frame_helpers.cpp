@@ -32,7 +32,12 @@ bool shot_corners_outside(const sprite::Vec3(&corners)[4],std::int32_t x,std::in
 void update_shot(Shot& shot,ShotFrameServices& services){
     constexpr float pi=0x1.921fb6p+1f;auto& env=services.callbacks();auto& host=env.firing();const auto& row=shot_record(*static_cast<Player*>(shot.context->objects_04[0]),shot.fields_b8[8]);
     const int duration=std::bit_cast<int>(row.field_34);if(duration>0&&shot.timer_1c.current>=duration){env.interrupt(shot.handle_18,1);recovered::timer_set(shot.timer_1c,-999);}
+#ifdef TH_SDL3
+    // Stored update is __fastcall (Shot*,void* dummy); wasm needs the dummy.
+    if(shot.fields_3c[2]&&reinterpret_cast<int(*)(Shot*,void*)>(shot.fields_3c[2])(&shot,nullptr)){host.retire(shot);return;}
+#else
     if(shot.fields_3c[2]&&reinterpret_cast<int(__thiscall*)(Shot*)>(shot.fields_3c[2])(&shot)){host.retire(shot);return;}
+#endif
     if(shot.fields_98[1]!=2){shot.motion.angle_1c=ecl::math::wrap_angle(shot.motion.angle_1c+row.field_18);shot.motion.field_18+=std::bit_cast<float>(row.fields_20[0]);}
     state::update_motion(shot.motion,host.clock_rate());auto* animation=env.find_animation(shot.handle_18);if(!animation){host.retire(shot);return;}
     if(row.type!=2&&row.type!=8){sprite::Vec3 corners[4]{};services.corners(*animation,corners);if(shot.timer_1c.current>=15&&shot_corners_outside(corners,services.viewport_x(),services.viewport_y())){host.retire(shot);return;}}

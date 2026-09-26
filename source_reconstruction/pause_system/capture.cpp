@@ -13,13 +13,22 @@ void enqueue_copy(sprite::Controller& c,int file,int texture,int x,int y,int wid
     for(auto& request:c.draw_state)if(static_cast<std::int32_t>(request[0])<0){const int values[]{file,texture,x,y,width,height,left,top,dest_width,dest_height};for(unsigned i=0;i<10;++i)request[i]=static_cast<std::uint32_t>(values[i]);return;}
 }
 }
-void copy_background_texture(sprite::Controller& c,int file,int index,IDirect3DSurface9* source,const RECT& destination_rect,const RECT& source_rect,int noise){
+void copy_background_texture(sprite::Controller& c,int file,int index,DeviceTexture* source,const RECT& destination_rect,const RECT& source_rect,int noise){
     auto* texture=c.files[file]->textures[index].texture;if(!texture)return;
-    sprite::flush_textured_quads(c,*pe::graphics_state.device);IDirect3DSurface9* destination;
-    texture=c.files[file]->textures[index].texture;if(texture->GetSurfaceLevel(0,&destination)!=D3D_OK)return;
+    sprite::flush_textured_quads(c,*pe::graphics_state.device);texture=c.files[file]->textures[index].texture;
+#ifdef TH_SDL3
+    if(platform_window::directx::copy_surface(texture,destination_rect,source,source_rect)==0&&noise==1){
+        auto& device=web::shared_device();
+        const auto locked=device.lock(texture,reinterpret_cast<const std::int32_t*>(&destination_rect.left));
+        if(!locked.pixels)return;
+        auto* row=static_cast<std::uint8_t*>(locked.pixels);
+#else
+    IDirect3DSurface9* destination;
+    if(texture->GetSurfaceLevel(0,&destination)!=D3D_OK)return;
     if(platform_window::directx::copy_surface(destination,destination_rect,source,source_rect)==D3D_OK&&noise==1){
         D3DLOCKED_RECT locked;if(destination->LockRect(&locked,&destination_rect,0)!=D3D_OK){destination->Release();return;}
         auto* row=static_cast<std::uint8_t*>(locked.pBits);
+#endif
         // Original 44be40 uses width for the outer loop and height for the
         // inner loop. Preserve that traversal and the three raw RNG draws.
         for(int x=0;x<destination_rect.right-destination_rect.left;++x){
@@ -31,11 +40,17 @@ void copy_background_texture(sprite::Controller& c,int file,int index,IDirect3DS
                 channels[0]=static_cast<std::uint8_t>(blue-blue*(next_raw(state::random_streams[1])&255u)/0x300u);
                 channels[2]=static_cast<std::uint8_t>(red-red*(next_raw(state::random_streams[1])&255u)/0x500u);channels[3]=255;
             }
-            row+=static_cast<std::uint32_t>(locked.Pitch)&~3u;
+            row+=static_cast<std::uint32_t>(locked.pitch)&~3u;
         }
+#ifdef TH_SDL3
+        device.unlock(texture);
+#else
         destination->UnlockRect();
+#endif
     }
+#ifndef TH_SDL3
     destination->Release();
+#endif
 }
 void capture_background(PauseInf& o){
     auto& c=*pe::sprite_controller;auto& g=pe::graphics_state;
@@ -44,7 +59,11 @@ void capture_background(PauseInf& o){
     const auto& a=*sprite::resolve_animation_handle(c,o.background_handle);const auto& descriptor=sprite::current_sprite(c,a);
     const RECT destination{static_cast<LONG>(descriptor.left),static_cast<LONG>(descriptor.top),static_cast<LONG>((descriptor.left+descriptor.extent_4c)-1.f),static_cast<LONG>((descriptor.top+descriptor.extent_48)-1.f)};
     const auto& v=g.viewports[1].adjusted_viewport;const RECT source{static_cast<LONG>(v.X),static_cast<LONG>(v.Y),static_cast<LONG>(v.X+v.Width),static_cast<LONG>(v.Y+v.Height)};
+#ifdef TH_SDL3
+    copy_background_texture(c,static_cast<int>(g.surface_animation->id),static_cast<int>(descriptor.field_04),reinterpret_cast<DeviceTexture*>(g.resource_01a0),destination,source,1);
+#else
     copy_background_texture(c,static_cast<int>(g.surface_animation->id),static_cast<int>(descriptor.field_04),static_cast<IDirect3DSurface9*>(g.resource_01a0),destination,source,1);
+#endif
 }
 void capture_practice_background(PauseInf& o){
     auto& c=*pe::sprite_controller;auto& g=pe::graphics_state;

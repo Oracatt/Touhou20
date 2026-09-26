@@ -33,9 +33,17 @@ FrameStatistics::~FrameStatistics() {
     unrecovered::scheduler_object_005c4a00=nullptr;
 }
 void FrameStatistics::update_local_time() {
+#ifdef TH_SDL3
+    // libc++ system_clock ticks at a different period than MSVC's 100ns clock;
+    // derive unix seconds from the actual period instead of asserting on it.
+    const auto ticks=std::chrono::system_clock::now().time_since_epoch();
+    wall_time_ticks=ticks.count();
+    unix_seconds=std::chrono::duration_cast<std::chrono::seconds>(ticks).count();
+#else
     static_assert(std::chrono::system_clock::period::den==10000000);
     wall_time_ticks=std::chrono::system_clock::now().time_since_epoch().count();
     unix_seconds=wall_time_ticks/10000000;
+#endif
     _localtime64_s(&local_time,&unix_seconds);
 }
 int FrameStatistics::update() {

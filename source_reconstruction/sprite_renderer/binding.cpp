@@ -79,5 +79,5 @@ AnimationFile& script_file(Controller& c,const Animation& animation) {return *c.
 AnimationFile& sprite_file(Controller& c,const Animation& animation) {return *c.files[animation.base.fields_10_28[3]];}
 SpriteData& current_sprite(Controller& c,const Animation& animation) {return sprite_file(c,animation).sprites[animation.base.fields_10_28[4]];}
 AnmInstruction* script_start(Controller& c,const Animation& animation) {return script_file(c,animation).scripts[animation.base.fields_10_28[5]];}
-IDirect3DTexture9* texture(Controller& c,std::uint32_t packed) {return c.files[th20::recovered::signed_bits(packed)>>8]->textures[packed&0xffu].texture;}
+DeviceTexture* texture(Controller& c,std::uint32_t packed) {return c.files[th20::recovered::signed_bits(packed)>>8]->textures[packed&0xffu].texture;}
 }

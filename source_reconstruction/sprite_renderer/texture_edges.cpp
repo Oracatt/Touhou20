@@ -23,7 +23,16 @@ void accumulate_argb8888(std::uint32_t* rgb,const std::uint8_t* pixel,std::uint3
     if(rgb && pixel[3]) {rgb[0]+=pixel[2];rgb[1]+=pixel[1];rgb[2]+=pixel[0];++count;}
 }
 }
-void repair_transparent_texels(IDirect3DTexture9& texture) {
+void repair_transparent_texels(DeviceTexture& texture) {
+#ifdef TH_SDL3
+    auto& device=web::shared_device();
+    const auto locked=device.lock(&texture);
+    if(!locked.pixels)return;
+    const std::uint32_t width=device.texture_width(&texture),height=device.texture_height(&texture);
+    const bool argb8888=true,argb1555=false,argb4444=false,argb8332=false;
+    const auto pitch=locked.pitch;
+    auto* memory=static_cast<std::uint8_t*>(locked.pixels);
+#else
     IDirect3DSurface9* surface=nullptr;texture.GetSurfaceLevel(0,&surface);
     if(!surface) return;
     D3DSURFACE_DESC description;surface->GetDesc(&description);
@@ -33,15 +42,18 @@ void repair_transparent_texels(IDirect3DTexture9& texture) {
     const bool argb1555=format==D3DFMT_A1R5G5B5;
     const bool argb4444=format==D3DFMT_A4R4G4B4;
     const bool argb8332=format==D3DFMT_A8R3G3B2;
+    const auto width=description.Width,height=description.Height;
+    const auto pitch=locked.Pitch;
+    auto* memory=static_cast<std::uint8_t*>(locked.pBits);
+#endif
     if(argb8888 || argb1555 || argb4444 || argb8332) {
         const int bytes=argb8888?4:2;
         // Original addresses vertical neighbors through a signed pixel-pitch
         // division, truncating toward zero, and then scales back to bytes.
-        const int vertical=(locked.Pitch/bytes)*bytes;
-        auto* memory=static_cast<std::uint8_t*>(locked.pBits);
-        for(std::uint32_t y=0;y<description.Height;++y) {
-            auto* pixel=memory+static_cast<std::int32_t>(static_cast<std::uint32_t>(locked.Pitch)*y);
-            for(std::uint32_t x=0;x<description.Width;++x,pixel+=bytes) {
+        const int vertical=(pitch/bytes)*bytes;
+        for(std::uint32_t y=0;y<height;++y) {
+            auto* pixel=memory+static_cast<std::int32_t>(static_cast<std::uint32_t>(pitch)*y);
+            for(std::uint32_t x=0;x<width;++x,pixel+=bytes) {
                 const auto value=argb8888?0:load_word(pixel);
                 const bool transparent=argb8888?pixel[3]==0:argb1555?!(value&0x8000):argb4444?!(value>>12):!(value>>8);
                 if(!transparent) continue;
@@ -54,9 +66,9 @@ void repair_transparent_texels(IDirect3DTexture9& texture) {
                     else accumulate_argb8332(rgb,reinterpret_cast<const std::uint16_t*>(neighbor),count);
                 };
                 if(x) add(pixel-bytes);
-                if(x<description.Width-1) add(pixel+bytes);
+                if(x<width-1) add(pixel+bytes);
                 if(y) add(pixel-vertical);
-                if(y<description.Height-1) add(pixel+vertical);
+                if(y<height-1) add(pixel+vertical);
                 if(count>1) for(auto& component:rgb) component/=count;
                 if(argb8888) {pixel[2]=static_cast<std::uint8_t>(rgb[0]);pixel[1]=static_cast<std::uint8_t>(rgb[1]);pixel[0]=static_cast<std::uint8_t>(rgb[2]);}
                 else if(argb1555) store_word(pixel,static_cast<std::uint16_t>((value&0x8000)|((rgb[0]&31)<<10)|((rgb[1]&31)<<5)|(rgb[2]&31)));
@@ -65,6 +77,10 @@ void repair_transparent_texels(IDirect3DTexture9& texture) {
             }
         }
     }
+#ifdef TH_SDL3
+    device.unlock(&texture);
+#else
     surface->UnlockRect();surface->Release();
+#endif
 }
 }

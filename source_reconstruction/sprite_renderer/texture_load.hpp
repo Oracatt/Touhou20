@@ -1,8 +1,9 @@
 #pragma once
 #include "animation_file.hpp"
+#include "../program_entry/device.hpp"
 namespace th20::source::sprite {
 struct TextureContext {
-    IDirect3DDevice9& device;
+    Device& device;
     std::int32_t render_width,render_height;
     D3DFORMAT backbuffer_format;
     float screen_scale;

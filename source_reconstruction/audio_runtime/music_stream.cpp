@@ -1,4 +1,5 @@
 #include "music_stream.hpp"
+#include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <memory>
@@ -24,7 +25,13 @@ double read_clock(MusicStream& stream) {
     if(!stream.sound->context || !stream.sound->context->read_clock) throw std::logic_error("Music clock service missing");
     return stream.sound->context->read_clock();
 }
-HRESULT notifications(IDirectSoundBuffer* buffer,unsigned count,std::uint32_t size,HANDLE event) {
+HRESULT notifications(SoundBuffer* buffer,unsigned count,std::uint32_t size,HANDLE event) {
+#ifdef TH_SDL3
+    // One native buffer owns both surfaces; no separate notify object exists.
+    std::vector<DSBPOSITIONNOTIFY> positions(count);
+    for(unsigned i=0;i<count;++i) {positions[i].dwOffset=size*i-1+size;positions[i].hEventNotify=event;}
+    return buffer->SetNotificationPositions(count,positions.data());
+#else
     IDirectSoundNotify* notify=nullptr;
     auto result=buffer->QueryInterface(IID_IDirectSoundNotify,reinterpret_cast<void**>(&notify));
     if(FAILED(result)) return result;
@@ -32,21 +39,25 @@ HRESULT notifications(IDirectSoundBuffer* buffer,unsigned count,std::uint32_t si
     std::vector<DSBPOSITIONNOTIFY> positions(count);
     for(unsigned i=0;i<count;++i) {positions[i].dwOffset=size*i-1+size;positions[i].hEventNotify=event;}
     result=notify->SetNotificationPositions(count,positions.data());notify->Release();return result;
+#endif
 }
 }
-MusicStream::MusicStream(SoundInf& parent,IDirectSoundBuffer* initial,std::uint32_t bytes,WaveReader* reader,std::uint32_t interval)
+MusicStream::MusicStream(SoundInf& parent,SoundBuffer* initial,std::uint32_t bytes,WaveReader* reader,std::uint32_t interval)
     :retained_04(0),buffers(nullptr),buffer_size(bytes),wave(reader),buffer_count(1),fade_remaining(0),fade_duration(0),fade_mode(0),
      play_priority(0),play_flags(0),retained_2c(0),retained_30(0),retained_34(0),started_at(0),paused_at(0),paused_duration(0),retained_50(0),
      playing(0),paused(0),description{},owner(nullptr),last_play_cursor(0),played_bytes(0),next_write(0),retained_94(0),silence(0),
      notification_size(interval),notification_event(nullptr),busy(0),sound(&parent) {
-    buffers=static_cast<IDirectSoundBuffer**>(runtime::allocate_bytes(sizeof *buffers));
+    buffers=static_cast<SoundBuffer**>(runtime::allocate_bytes(sizeof *buffers));
     if(!buffers) throw std::bad_alloc();
     buffers[0]=initial;fill(initial,false,0);initial->SetCurrentPosition(0);
 }
 MusicStream::~MusicStream() {release_buffers(*this);destroy_wave(wave);wave=nullptr;}
-HRESULT MusicStream::restore(IDirectSoundBuffer* target,BOOL* restored) {
+HRESULT MusicStream::restore(SoundBuffer* target,BOOL* restored) {
     if(!target) return CO_E_NOTINITIALIZED;
     if(restored) *restored=FALSE;
+#ifdef TH_SDL3
+    return target->Restore(); // software buffers are never lost
+#else
     DWORD status=0;auto result=target->GetStatus(&status);if(FAILED(result)) return result;
     if(status&DSBSTATUS_BUFFERLOST) {
         do {
@@ -56,9 +67,10 @@ HRESULT MusicStream::restore(IDirectSoundBuffer* target,BOOL* restored) {
         if(restored) *restored=TRUE;
     }
     return S_OK;
+#endif
 }
-IDirectSoundBuffer* MusicStream::buffer(unsigned index) const {return buffers && index<buffer_count?buffers[index]:nullptr;}
-IDirectSoundBuffer* MusicStream::free_buffer() {
+SoundBuffer* MusicStream::buffer(unsigned index) const {return buffers && index<buffer_count?buffers[index]:nullptr;}
+SoundBuffer* MusicStream::free_buffer() {
     if(!buffers) return nullptr;
     unsigned index=0;
     for(;index<buffer_count;++index) if(buffers[index]) {
@@ -67,7 +79,7 @@ IDirectSoundBuffer* MusicStream::free_buffer() {
     if(index==buffer_count) index=static_cast<unsigned>(std::rand())%buffer_count;
     return buffers[index];
 }
-HRESULT MusicStream::fill(IDirectSoundBuffer* target,bool loop,std::uint32_t position) {
+HRESULT MusicStream::fill(SoundBuffer* target,bool loop,std::uint32_t position) {
     if(!target) return CO_E_NOTINITIALIZED;
     auto result=restore(target,nullptr);if(FAILED(result)) return result;
     void* pointer=nullptr;DWORD size=0;
@@ -159,7 +171,7 @@ HRESULT MusicStream::resume() {
 HRESULT MusicStream::reopen(TrackFormat* format,std::uint32_t position) {return wave->reopen(format,position,base_offset(*this));}
 HRESULT MusicStream::recreate(TrackFormat* format) {
     playing=0;release_buffers(*this);
-    buffers=static_cast<IDirectSoundBuffer**>(runtime::allocate_bytes(buffer_count*sizeof *buffers));
+    buffers=static_cast<SoundBuffer**>(runtime::allocate_bytes(buffer_count*sizeof *buffers));
     if(!buffers) throw std::bad_alloc();std::memset(buffers,0,buffer_count*sizeof *buffers);
     auto copy=description;copy.lpwfxFormat=&format->format;
     for(unsigned i=0;i<buffer_count;++i) {
@@ -183,6 +195,7 @@ int MusicStream::tick_fade(unsigned mode) {
 }
 void update_stream(SoundInf& sound) {if(sound.stream) for(unsigned mode:{1u,2u,4u,3u}) sound.stream->tick_fade(mode);}
 double MusicStream::playback_seconds() {
+    if(!wave||!wave->track) {std::fprintf(stderr,"playback_seconds: wave=%p track=%p\n",static_cast<void*>(wave),wave?static_cast<void*>(wave->track):nullptr);throw std::logic_error("Music stream has no wave track");}
     auto& f=*wave->track;
     const double now=read_clock(*this);
     double elapsed=now-(started_at+paused_duration);
@@ -207,7 +220,7 @@ HRESULT create_music_stream(SoundInf& sound,WaveReader* reader,DWORD flags,const
     if(!sound.device_owner || !sound.device_owner->device) return CO_E_NOTINITIALIZED;
     DSBUFFERDESC description{};description.dwSize=sizeof description;description.dwFlags=flags|0x18188;
     description.dwBufferBytes=size*count;description.lpwfxFormat=&reader->track->format;description.guid3DAlgorithm=algorithm;
-    IDirectSoundBuffer* buffer=nullptr;
+    SoundBuffer* buffer=nullptr;
     auto result=sound.device_owner->device->CreateSoundBuffer(&description,&buffer,nullptr);if(FAILED(result)) {destroy_wave(reader);return result;}
     result=notifications(buffer,count,size,event);if(FAILED(result)) {buffer->Release();destroy_wave(reader);return result;}
     auto* stream=new MusicStream(sound,buffer,description.dwBufferBytes,reader,size);

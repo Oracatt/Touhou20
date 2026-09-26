@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory_resource>
 #include <utility>
+#include <new>
 #include <emmintrin.h>
 namespace th20::source::text {
 namespace {
@@ -20,17 +21,33 @@ const BitmapFormat* bitmap_format(std::int32_t format) noexcept {
 Bitmap::Bitmap(){std::memset(this,0,sizeof(*this));format=-1;}
 Bitmap::~Bitmap(){release();}
 bool Bitmap::release() {
+#ifdef TH_SDL3
+    const bool existed=pixels!=nullptr;
+    if(existed){delete[] pixels;format=-1;width=height=0;pixels=nullptr;}
+    return existed;
+#else
     const bool existed=dc!=nullptr;if(existed){SelectObject(dc,previous);DeleteDC(dc);DeleteObject(bitmap);format=-1;width=height=0;dc=nullptr;bitmap=nullptr;previous=nullptr;pixels=nullptr;}
     return existed;
+#endif
 }
 bool Bitmap::create(std::int32_t requested_width,std::int32_t requested_height,std::int32_t requested_format) {
-    release();BITMAPV4HEADER info{};auto* entry=bitmap_format(requested_format);if(!entry)return false;
+    release();auto* entry=bitmap_format(requested_format);if(!entry)return false;
     const int row_bytes=((requested_width*entry->bits)/8+3)/4*4;
+#ifdef TH_SDL3
+    // Plain top-down pixel store; the GDI DIB allocated requested_height+1
+    // rows while reporting requested_height rows of image bytes.
+    const std::uint32_t image=static_cast<std::uint32_t>(requested_height)*row_bytes;
+    pixels=new(std::nothrow) std::uint8_t[static_cast<std::size_t>(requested_height+1)*row_bytes]();
+    if(!pixels)return false;
+    image_bytes=image;
+#else
+    BITMAPV4HEADER info{};
     info.bV4Size=sizeof(info);info.bV4Width=requested_width;info.bV4Height=-(requested_height+1);info.bV4Planes=1;
     info.bV4BitCount=static_cast<WORD>(entry->bits);info.bV4SizeImage=requested_height*row_bytes;
     if(requested_format!=24 && requested_format!=22){info.bV4V4Compression=BI_BITFIELDS;info.bV4RedMask=entry->red;info.bV4GreenMask=entry->green;info.bV4BlueMask=entry->blue;info.bV4AlphaMask=entry->alpha;}
     void* memory=nullptr;auto handle=CreateDIBSection(nullptr,reinterpret_cast<BITMAPINFO*>(&info),DIB_RGB_COLORS,&memory,nullptr,0);if(!handle)return false;
     auto context=CreateCompatibleDC(nullptr);auto old=SelectObject(context,handle);dc=context;bitmap=handle;pixels=static_cast<std::uint8_t*>(memory);image_bytes=info.bV4SizeImage;previous=old;
+#endif
     width=requested_width;height=requested_height;format=requested_format;pitch=row_bytes;
     if(format==21)for(std::uint32_t offset=0;offset<image_bytes;offset+=4)store(pixels+offset,0xff000000u);
     else if(format==26)for(std::uint32_t offset=0;offset<image_bytes;offset+=2)store(pixels+offset,std::uint16_t(0xf000));return true;

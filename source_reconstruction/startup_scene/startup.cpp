@@ -1,5 +1,9 @@
 #include "startup.hpp"
 #include "data_constants.hpp"
+#ifdef TH_SDL3
+#include "platform/Time.hpp"
+#include "platform/Files.hpp"
+#endif
 #include "../platform_window/graphics_callbacks.hpp"
 #include "../platform_window/frame_statistics.hpp"
 #include "../sprite_renderer/animation_file.hpp"
@@ -22,7 +26,13 @@ int __cdecl update_callback(void* object) {return static_cast<LoadingScene*>(obj
 int __cdecl draw_callback(void* object) {return static_cast<LoadingScene*>(object)->draw();} //4d85b0
 bool file_exists(const char* name) {
     std::lock_guard<std::recursive_mutex> lock(runtime::shared_locks().slot(2));
+#ifdef TH_SDL3
+    // Loose game files live under the launcher-mounted /game tree; route
+    // through the file host instead of the bare process CWD.
+    return web::files::exists(name);
+#else
     return std::filesystem::exists(name);
+#endif
 }
 }
 LoadingScene::LoadingScene() {
@@ -51,7 +61,7 @@ int LoadingScene::register_callbacks() {
             if(worker.thread.joinable()) worker.thread.detach();
         }
         worker.close_requested.store(false,std::memory_order_seq_cst);
-        worker.thread=std::jthread([](LoadingScene*) {load_worker();},this);
+        worker.thread=TH20_WORKER_THREAD("startup-load",[](LoadingScene*) {load_worker();},this);
     }
     game_session::bind_default_player();return 0;
 }
@@ -84,7 +94,14 @@ LoadingScene* create_loading_scene() {
     return object;
 }
 int load_worker() {
-    Sleep(2000);auto& self=*loading_scene;
+#ifdef TH_SDL3
+    // The original stalls two seconds on a real thread before loading; the
+    // browser runtime has no blockable thread and starts loading immediately.
+    web::time::sleep(2000);
+#else
+    Sleep(2000);
+#endif
+    auto& self=*loading_scene;
     self.signature_file=sprite::load_animation_file(*pe::sprite_controller,1,"sig.anm",pe::log_buffer,pe::graphics_state.event_flags);
     if(self.signature_file) {
         scheduler::enable(*self.draw_node);std::atomic_ref(self.signature_ready).store(1,std::memory_order_release);
@@ -100,7 +117,15 @@ int load_worker() {
                     else strcpy_s(audio.music_file,0x20,"thbgm.dat");
                 }
                 initialize_shared_scene_resources();
+#ifdef TH_SDL3
+                // No loader thread exists on the browser runtime: the worker
+                // body IS the main thread, so pump the per-frame background
+                // jobs ourselves until the staged files are ready.
+                while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags))
+                    pw::unrecovered::pump_background_jobs(*pe::sprite_controller);
+#else
                 while(!sprite::animation_files_ready(*pe::sprite_controller,pe::graphics_state.event_flags)) Sleep(1);
+#endif
                 scheduler::enable(*self.update_node);
                 auto* statistics=static_cast<pw::FrameStatistics*>(pw::unrecovered::scheduler_object_005c4a00);
                 statistics->end_times[0]=std::chrono::steady_clock::now().time_since_epoch().count(); //4515e0(slot0)
